@@ -35,3 +35,10 @@ coverage/
 *.tmp
 *.temp
 
+# Project-specific ignores
+.venv/
+__pycache__/
+uv.lock
+bun.lock
+jsrepo.json
+components.json
