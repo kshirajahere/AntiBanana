@@ -1,0 +1,20 @@
+[project]
+name = "deepfake-detection-backend"
+version = "0.1.0"
+description = "Deepfake detection service"
+requires-python = ">=3.10"
+dependencies = [
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "transformers<4.48.0",
+    "opencv-python",
+    "scipy",
+    "flask",
+    "flask-cors",
+    "pillow",
+    "numpy<2",
+    "safetensors"
+]
+
+[dependency-groups]
+dev = []

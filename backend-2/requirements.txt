@@ -1,0 +1,8 @@
+torch
+transformers
+opencv-python
+scipy
+flask
+flask-cors
+Pillow
+numpy
