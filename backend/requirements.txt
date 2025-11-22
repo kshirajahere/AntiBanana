@@ -1,4 +1,5 @@
 torch
+torchvision
 transformers
 opencv-python
 scipy
@@ -6,3 +7,14 @@ flask
 flask-cors
 Pillow
 numpy
+lime
+shap
+grad-cam
+pytorch-grad-cam
+matplotlib
+scikit-image
+scikit-learn
+c2pa-python
+python-dateutil
+cryptography
+requests

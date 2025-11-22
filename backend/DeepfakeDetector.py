@@ -13,6 +13,12 @@ from PIL import Image
 import cv2
 from scipy.fftpack import fft2, fftshift
 
+# Import Explainability Engine for XAI capabilities
+from ExplainabilityEngine import ExplainabilityEngine, create_model_wrapper_for_pipeline
+
+# Import C2PA Verifier for content provenance and authenticity
+from C2PAVerifier import C2PAVerifier
+
 class DeepfakeDetector:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -43,6 +49,36 @@ class DeepfakeDetector:
         except Exception as e:
             print(f"❌ Failed to load AI Generation Model: {e}")
             self.ai_gen_pipe = None
+        
+        # 3. Initialize Explainability Engine for XAI
+        try:
+            self.explainability_engine = ExplainabilityEngine(device=self.device)
+            
+            # Create prediction wrappers for LIME/SHAP
+            if self.ai_gen_pipe:
+                self.ai_gen_predict_fn = create_model_wrapper_for_pipeline(self.ai_gen_pipe)
+            else:
+                self.ai_gen_predict_fn = None
+                
+            if self.faceswap_pipe:
+                self.faceswap_predict_fn = create_model_wrapper_for_pipeline(self.faceswap_pipe)
+            else:
+                self.faceswap_predict_fn = None
+            
+            print("✅ Explainability Engine Initialized (LIME, SHAP, Grad-CAM)")
+        except Exception as e:
+            print(f"❌ Failed to initialize Explainability Engine: {e}")
+            self.explainability_engine = None
+            self.ai_gen_predict_fn = None
+            self.faceswap_predict_fn = None
+        
+        # 4. Initialize C2PA Verifier for content provenance
+        try:
+            self.c2pa_verifier = C2PAVerifier()
+            print("✅ C2PA Verifier Initialized (Content Provenance & Chain of Custody)")
+        except Exception as e:
+            print(f"❌ Failed to initialize C2PA Verifier: {e}")
+            self.c2pa_verifier = None
 
     def detect_faceswap(self, image):
         """Detects traditional face swapping deepfakes."""
@@ -368,12 +404,26 @@ class DeepfakeDetector:
             "patch_variance": float(patch_variance)
         }
 
-    def detect_all(self, image_path):
-        """Runs all detection methods and aggregates the result."""
+    def detect_all(self, image_path, include_c2pa=True):
+        """Runs all detection methods and aggregates the result.
+        
+        Args:
+            image_path: Path to the image file
+            include_c2pa: Whether to include C2PA provenance analysis
+        """
         try:
             image = Image.open(image_path).convert("RGB")
         except Exception as e:
             return {"error": f"Invalid image path: {e}"}
+        
+        # C2PA Provenance Check (if enabled)
+        c2pa_result = None
+        if include_c2pa and self.c2pa_verifier:
+            try:
+                c2pa_result = self.c2pa_verifier.verify_chain_of_custody(image_path)
+            except Exception as e:
+                print(f"⚠️ C2PA verification failed: {e}")
+                c2pa_result = {"error": str(e)}
 
         faceswap_res = self.detect_faceswap(image)
         
@@ -462,6 +512,27 @@ class DeepfakeDetector:
             W_EDGE * edge_score_calibrated
         )
         
+        # === C2PA Trust Factor ===
+        # Adjust scores based on C2PA provenance data
+        c2pa_trust_boost = 0.0
+        c2pa_risk_penalty = 0.0
+        
+        if c2pa_result:
+            if c2pa_result.get("has_c2pa", False):
+                if c2pa_result.get("verified", False):
+                    # Verified C2PA chain of custody - boost trust
+                    trust_level = c2pa_result.get("trust_level", "unknown")
+                    if trust_level == "high":
+                        c2pa_trust_boost = -0.15  # Reduce fake score
+                    elif trust_level == "medium":
+                        c2pa_trust_boost = -0.08
+                else:
+                    # Has C2PA but not verified - increase suspicion
+                    c2pa_risk_penalty = 0.10
+            else:
+                # No C2PA data - slight penalty in modern context
+                c2pa_risk_penalty = 0.05
+        
         # === Multi-Signal Confirmation ===
         # Detect signals with balanced thresholds
         signal_count = 0
@@ -494,6 +565,9 @@ class DeepfakeDetector:
         if signal_count >= 2:
             consensus_boost = 0.15 * (signal_count - 1) # Increased boost slightly
             ensemble_score = min(ensemble_score + consensus_boost, 1.0)
+        
+        # Apply C2PA adjustments
+        ensemble_score = ensemble_score + c2pa_trust_boost + c2pa_risk_penalty
         
         # === Anomaly Detection: Check for Outliers ===
         # Relaxed penalties
@@ -557,7 +631,7 @@ class DeepfakeDetector:
             else:
                 fake_type = "AI Generated (Diffusion/GAN)"
 
-        return {
+        result = {
             "verdict": verdict,
             "confidence": final_score,
             "confidence_level": confidence_level,
@@ -582,6 +656,201 @@ class DeepfakeDetector:
             "detection_signals": strong_signals,
             "signal_count": signal_count
         }
+        
+        # Add C2PA provenance data if available
+        if c2pa_result:
+            result["c2pa_provenance"] = {
+                "has_c2pa": c2pa_result.get("has_c2pa", False),
+                "verified": c2pa_result.get("verified", False),
+                "trust_level": c2pa_result.get("trust_level", "unknown"),
+                "risk_score": c2pa_result.get("risk_score", 1.0),
+                "warnings": c2pa_result.get("warnings", []),
+                "claim_generator": c2pa_result.get("claim_generator", None),
+                "edit_history_count": len(c2pa_result.get("edit_history", [])),
+                "trust_adjustment": c2pa_trust_boost + c2pa_risk_penalty
+            }
+        
+        return result
+    
+    def generate_explainability(self, image_path, method='all', quick_mode=False):
+        """
+        Generate explainability visualizations for the detection result.
+        
+        Args:
+            image_path: Path to the image file
+            method: Explainability method ('lime', 'shap', 'gradcam', 'all')
+            quick_mode: If True, uses faster but less accurate parameters
+            
+        Returns:
+            Dictionary containing explainability visualizations and data
+        """
+        if not self.explainability_engine:
+            return {
+                "error": "Explainability Engine not initialized",
+                "explanations": {}
+            }
+        
+        try:
+            image = Image.open(image_path).convert("RGB")
+        except Exception as e:
+            return {"error": f"Invalid image path: {e}"}
+        
+        explanations = {}
+        
+        # Determine which model to use for explanations (prefer AI gen model)
+        primary_model = self.ai_gen_pipe
+        primary_predict_fn = self.ai_gen_predict_fn
+        model_name = "AI Generation Detector"
+        
+        if not primary_model and self.faceswap_pipe:
+            primary_model = self.faceswap_pipe
+            primary_predict_fn = self.faceswap_predict_fn
+            model_name = "Face Swap Detector"
+        
+        if not primary_model or not primary_predict_fn:
+            return {
+                "error": "No detection models available for explanation",
+                "explanations": {}
+            }
+        
+        print(f"🔍 Generating explanations using {model_name}...")
+        
+        # Set parameters based on mode
+        lime_samples = 300 if quick_mode else 1000
+        shap_evals = 200 if quick_mode else 500
+        
+        # LIME Explanation
+        if method in ['lime', 'all']:
+            try:
+                lime_result = self.explainability_engine.explain_with_lime(
+                    image,
+                    primary_predict_fn,
+                    num_samples=lime_samples,
+                    num_features=10,
+                    positive_only=False
+                )
+                explanations['lime'] = lime_result
+            except Exception as e:
+                print(f"⚠️ LIME failed: {e}")
+                explanations['lime'] = {"error": str(e)}
+        
+        # SHAP Explanation
+        if method in ['shap', 'all']:
+            try:
+                shap_result = self.explainability_engine.explain_with_shap(
+                    image,
+                    primary_predict_fn,
+                    num_evals=shap_evals
+                )
+                explanations['shap'] = shap_result
+            except Exception as e:
+                print(f"⚠️ SHAP failed: {e}")
+                explanations['shap'] = {"error": str(e)}
+        
+        # Grad-CAM Explanations (requires access to model internals)
+        if method in ['gradcam', 'all']:
+            # Note: Grad-CAM requires PyTorch model with accessible layers
+            # HuggingFace pipelines wrap models, making this complex
+            # We'll attempt to extract the model from the pipeline
+            try:
+                # Get the underlying model from pipeline
+                model = primary_model.model
+                
+                # Find target layers (typically last conv layer for ViT)
+                # For Vision Transformers, we target the last attention layer
+                target_layers = []
+                
+                # Try to find appropriate layers
+                if hasattr(model, 'vit'):  # ViT-based model
+                    if hasattr(model.vit, 'encoder'):
+                        if hasattr(model.vit.encoder, 'layer'):
+                            # Last transformer block
+                            target_layers = [model.vit.encoder.layer[-1].layernorm_before]
+                elif hasattr(model, 'base_model'):
+                    # Alternative structure
+                    base = model.base_model
+                    if hasattr(base, 'encoder') and hasattr(base.encoder, 'layer'):
+                        target_layers = [base.encoder.layer[-1].layernorm_before]
+                
+                if target_layers:
+                    gradcam_result = self.explainability_engine.explain_with_gradcam(
+                        image,
+                        model,
+                        target_layers,
+                        target_class=1,  # Fake class
+                        method='gradcam'
+                    )
+                    explanations['gradcam'] = gradcam_result
+                    
+                    # Also try GradCAM++
+                    if not quick_mode:
+                        gradcampp_result = self.explainability_engine.explain_with_gradcam(
+                            image,
+                            model,
+                            target_layers,
+                            target_class=1,
+                            method='gradcam++'
+                        )
+                        explanations['gradcam++'] = gradcampp_result
+                else:
+                    explanations['gradcam'] = {
+                        "error": "Could not identify appropriate target layers for Grad-CAM",
+                        "note": "Grad-CAM requires direct access to model layers"
+                    }
+                    
+            except Exception as e:
+                print(f"⚠️ Grad-CAM failed: {e}")
+                import traceback
+                traceback.print_exc()
+                explanations['gradcam'] = {"error": str(e)}
+        
+        # Create comparison visualization if multiple methods succeeded
+        successful_explanations = {k: v for k, v in explanations.items() 
+                                   if 'visualization' in v}
+        
+        if len(successful_explanations) > 1:
+            try:
+                comparison = self.explainability_engine.create_comparison_visualization(
+                    successful_explanations
+                )
+                if comparison:
+                    explanations['comparison'] = {
+                        'visualization': comparison,
+                        'description': 'Side-by-side comparison of all explanation methods'
+                    }
+            except Exception as e:
+                print(f"⚠️ Comparison visualization failed: {e}")
+        
+        return {
+            "model_used": model_name,
+            "explanations": explanations,
+            "quick_mode": quick_mode
+        }
+    
+    def get_c2pa_report(self, image_path):
+        """
+        Generate comprehensive C2PA provenance report.
+        
+        Args:
+            image_path: Path to the image file
+            
+        Returns:
+            Dictionary containing complete C2PA provenance report
+        """
+        if not self.c2pa_verifier:
+            return {
+                "error": "C2PA Verifier not initialized",
+                "has_c2pa": False
+            }
+        
+        try:
+            return self.c2pa_verifier.generate_provenance_report(image_path)
+        except Exception as e:
+            print(f"❌ Error generating C2PA report: {e}")
+            return {
+                "error": str(e),
+                "has_c2pa": False
+            }
 
 # Singleton instance for easy import
 # detector = DeepfakeDetector()
