@@ -83,7 +83,7 @@ export function HeroSection() {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#030303]">
       {/* Gradient backgrounds */}
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.05] via-transparent to-rose-500/[0.05] blur-3xl" />
-      
+
       {/* Ripple effect */}
       <div className="absolute inset-0">
         <Ripple />
@@ -187,24 +187,24 @@ export function HeroSection() {
           transition={{ duration: 0.8, delay: 0.4 }}
           className="flex flex-col md:flex-row items-center justify-center gap-4"
         >
-          <ShimmerButton className="w-auto px-6 py-3 rounded-md">
-            <button
-              onClick={() => router.push("/protect")}
-              className="text-xl font-semibold text-white bg-transparent hover:bg-primary/20 transition-all duration-300"
-            >
-              <Shield className="w-5 h-5 mr-2 inline-block" />
+          <ShimmerButton
+            className="w-auto px-6 py-3 rounded-md"
+            onClick={() => router.push("/protect")}
+          >
+            <span className="text-xl font-semibold text-white flex items-center">
+              <Shield className="w-5 h-5 mr-2" />
               Protect
-            </button>
+            </span>
           </ShimmerButton>
 
-          <ShimmerButton className="w-auto px-6 py-3 rounded-md">
-            <button
-              onClick={() => router.push("/detect")}
-              className="text-xl font-semibold text-white bg-transparent hover:bg-primary/20 transition-all duration-300"
-            >
-              <Search className="w-5 h-5 mr-2 inline-block" />
+          <ShimmerButton
+            className="w-auto px-6 py-3 rounded-md"
+            onClick={() => router.push("/detect")}
+          >
+            <span className="text-xl font-semibold text-white flex items-center">
+              <Search className="w-5 h-5 mr-2" />
               Detect
-            </button>
+            </span>
           </ShimmerButton>
         </motion.div>
       </div>

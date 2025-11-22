@@ -1,15 +1,13 @@
-"use client"
+"use client";
 
-import type React from "react"
-import { useState, useRef } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import ReactJson from "react-json-view"
-import { Navbar } from "@/components/navbar"
-import { Footer } from "@/components/footer"
+import type React from "react";
+import { useState, useRef, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import ReactJson from "react-json-view";
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 import {
   Search,
-  Upload,
-  FileImage,
   Shield,
   AlertTriangle,
   CheckCircle,
@@ -18,683 +16,334 @@ import {
   Loader2,
   Gauge,
   FileText,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { cn } from "@/lib/utils"
+  Download,
+  ChevronRight,
+  Eye,
+  Activity,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { FileUploader } from "@/components/file-uploader";
+import { AnalysisProgress, AnalysisStep } from "@/components/analysis-progress";
+import { useRouter } from "next/navigation";
+
+// Types
+interface DeepfakeResult {
+  label: string;
+  score: number;
+}
+
+interface VideoFrameResult {
+  frame_number: number;
+  timestamp: string;
+  prediction: string;
+  fusion_score: number;
+  is_fake: boolean;
+}
+
+interface VideoAnalysis {
+  duration: string;
+  total_frames_analyzed: number;
+  fake_frames_detected: number;
+  fps: number;
+  frame_interval: number;
+  results: VideoFrameResult[];
+}
+
+interface LipSyncAnalysis {
+  real_probability: number;
+  fake_probability: number;
+  description?: string;
+  error?: string;
+  processing_time_seconds?: number;
+}
+
+interface AnalysisResults {
+  deepfake?: string | DeepfakeResult[];
+  video_analysis?: VideoAnalysis;
+  lip_sync_analysis?: LipSyncAnalysis | number;
+  manifest?: any;
+  report?: any;
+  segmented?: {
+    LIME?: { overlay: string };
+    "GradCAM++"?: { overlay: string };
+  };
+}
+
+const DETECTION_STEPS: AnalysisStep[] = [
+  {
+    id: "facial",
+    label: "Facial Analysis",
+    description: "Scanning for facial inconsistencies and artifacts",
+  },
+  {
+    id: "pattern",
+    label: "Pattern Recognition",
+    description: "Analyzing texture patterns and noise distribution",
+  },
+  {
+    id: "metadata",
+    label: "Metadata Verification",
+    description: "Checking file integrity and origin data",
+  },
+  {
+    id: "final",
+    label: "Final Assessment",
+    description: "Compiling results and generating report",
+  },
+];
 
 export default function DetectPage() {
-  const [file, setFile] = useState<File | null>(null)
-  const [preview, setPreview] = useState<string | null>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysisProgress, setAnalysisProgress] = useState(0)
-  const [results, setResults] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const router = useRouter();
+  const [file, setFile] = useState<File | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [results, setResults] = useState<AnalysisResults | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-  }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-      handleFile(e.dataTransfer.files[0])
-    }
-  }
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      handleFile(e.target.files[0])
-    }
-  }
-
-  const handleFile = (selectedFile: File) => {
-    // Check if file is an image or video
-    if (!selectedFile.type.startsWith("image/") && !selectedFile.type.startsWith("video/")) {
-      setError("Please upload an image or video file (JPG, PNG, WEBP, MP4, AVI, MOV)")
-      return
-    }
-
-    setFile(selectedFile)
-    setError(null)
+  const handleFileSelect = (selectedFile: File) => {
+    setFile(selectedFile);
+    setError(null);
 
     // Create preview
-    const reader = new FileReader()
+    const reader = new FileReader();
     reader.onload = (e) => {
-      setPreview(e.target?.result as string)
-    }
-    reader.readAsDataURL(selectedFile)
-  }
+      setPreview(e.target?.result as string);
+    };
+    reader.readAsDataURL(selectedFile);
+  };
 
   const analyzeMedia = async () => {
-    if (!file) return
+    if (!file) return;
 
-    setIsAnalyzing(true)
-    setAnalysisProgress(0)
-    setResults(null)
-    setError(null)
+    setIsAnalyzing(true);
+    setAnalysisProgress(0);
+    setCurrentStepIndex(0);
+    setResults(null);
+    setError(null);
 
-    // Simulate progress
+    // Simulate progress steps
     const progressInterval = setInterval(() => {
       setAnalysisProgress((prev) => {
-        if (prev >= 95) {
-          clearInterval(progressInterval)
-          return prev
-        }
-        return prev + Math.random() * 15
-      })
-    }, 300)
+        const next = prev + Math.random() * 5;
+
+        // Update steps based on progress
+        if (next > 25 && currentStepIndex < 1) setCurrentStepIndex(1);
+        if (next > 50 && currentStepIndex < 2) setCurrentStepIndex(2);
+        if (next > 75 && currentStepIndex < 3) setCurrentStepIndex(3);
+
+        return next >= 90 ? 90 : next;
+      });
+    }, 500);
 
     try {
-      const formData = new FormData()
-      formData.append("file", file)
+      const formData = new FormData();
+      formData.append("file", file);
 
       // Determine endpoint based on file type
       const endpoint = file.type.startsWith("video/")
         ? "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_video"
-        : "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_image"
+        : "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_image";
 
       const response = await fetch(endpoint, {
         method: "POST",
         body: formData,
-      })
+      });
 
-      clearInterval(progressInterval)
+      clearInterval(progressInterval);
 
       if (!response.ok) {
-        throw new Error("Analysis failed. Please try again.")
+        throw new Error("Analysis failed. Please try again.");
       }
 
-      const data = await response.json()
-      setAnalysisProgress(100)
+      const data = await response.json();
+      setAnalysisProgress(100);
+      setCurrentStepIndex(4); // Complete
 
       // Short delay to show 100% progress
       setTimeout(() => {
         if (file.type.startsWith("image/")) {
           // Handle image results
-          if (!data || (typeof data === "string" && data.includes("No image data received"))) {
-            setError("Detection failed: No valid image data received")
-            setIsAnalyzing(false)
-            return
+          if (
+            !data ||
+            (typeof data === "string" &&
+              data.includes("No image data received"))
+          ) {
+            setError("Detection failed: No valid image data received");
+            setIsAnalyzing(false);
+            return;
           }
 
           if (!data.deepfake) {
-            setError("Detection failed: Could not analyze the image")
-            setIsAnalyzing(false)
-            return
+            setError("Detection failed: Could not analyze the image");
+            setIsAnalyzing(false);
+            return;
           }
         }
         // For both image and video results
-        setResults(data)
-        setIsAnalyzing(false)
-      }, 500)
+        setResults(data);
+        setIsAnalyzing(false);
+      }, 800);
     } catch (err) {
-      clearInterval(progressInterval)
-      setError(err instanceof Error ? err.message : "An unknown error occurred")
-      setIsAnalyzing(false)
+      clearInterval(progressInterval);
+      setError(
+        err instanceof Error ? err.message : "An unknown error occurred"
+      );
+      setIsAnalyzing(false);
     }
-  }
+  };
 
   const resetAnalysis = () => {
-    setFile(null)
-    setPreview(null)
-    setResults(null)
-    setError(null)
-    setIsAnalyzing(false)
-    setAnalysisProgress(0)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-  }
+    setFile(null);
+    setPreview(null);
+    setResults(null);
+    setError(null);
+    setIsAnalyzing(false);
+    setAnalysisProgress(0);
+    setCurrentStepIndex(0);
+  };
 
-  // Determine if the image is fake or real based on results
+  // Helper to determine result status
   const getResultStatus = () => {
-    if (!results) return null
+    if (!results) return null;
 
-    // Handle new array format
+    // Video Analysis
+    if (results.video_analysis) {
+      const fakePercentage =
+        (results.video_analysis.fake_frames_detected /
+          results.video_analysis.total_frames_analyzed) *
+        100;
+      if (fakePercentage > 30) return "fake";
+      if (fakePercentage > 10) return "suspicious";
+      return "real";
+    }
+
+    // Image Analysis
     if (Array.isArray(results.deepfake)) {
-      // Find the object with the highest score
-      interface DeepfakeResult {
-        label: string
-        score: number
-      }
-
-      const highestScoreResult: DeepfakeResult = results.deepfake.reduce(
-        (prev: DeepfakeResult, current: DeepfakeResult) => (prev.score > current.score ? prev : current),
-        { label: "", score: Number.NEGATIVE_INFINITY },
-      )
-
+      const highestScoreResult = results.deepfake.reduce(
+        (prev, current) => (prev.score > current.score ? prev : current),
+        { label: "", score: Number.NEGATIVE_INFINITY }
+      );
       if (highestScoreResult.label) {
-        return highestScoreResult.label.toLowerCase()
+        return highestScoreResult.label.toLowerCase();
       }
-      return "unknown"
+    } else if (typeof results.deepfake === "string") {
+      if (results.deepfake.startsWith("Fake")) return "fake";
+      if (results.deepfake.startsWith("Real")) return "real";
     }
 
-    // Handle old string format for backwards compatibility
-    const deepfakeResult = results.deepfake || ""
-    if (deepfakeResult.startsWith("Fake")) {
-      return "fake"
-    } else if (deepfakeResult.startsWith("Real")) {
-      return "real"
-    }
-    return "unknown"
-  }
+    return "unknown";
+  };
 
-  // Extract confidence score from results
   const getConfidenceScore = () => {
-    if (!results || !results.deepfake) return null
+    if (!results) return 0;
+
+    if (results.video_analysis) {
+      const fakePercentage =
+        (results.video_analysis.fake_frames_detected /
+          results.video_analysis.total_frames_analyzed) *
+        100;
+      return Math.round(fakePercentage);
+    }
+
+    if (Array.isArray(results.deepfake)) {
+      const highestScoreResult = results.deepfake.reduce(
+        (prev, current) => (prev.score > current.score ? prev : current),
+        { label: "", score: 0 }
+      );
+      return Math.round(highestScoreResult.score * 100);
+    }
 
     if (typeof results.deepfake === "string") {
-      const match = results.deepfake.match(/\d+\.\d+/)
-      if (match) {
-        const score = Number.parseFloat(match[0])
-        // Convert to percentage between 0-100
-        return Math.abs(score) * 100
-      }
-    } else if (Array.isArray(results.deepfake)) {
-      // Handle new array format
-      const highestScoreResult = results.deepfake.reduce(
-        (prev: any, current: any) => (prev.score > current.score ? prev : current),
-        { label: "", score: Number.NEGATIVE_INFINITY },
-      )
-      return highestScoreResult.score * 100
+      const match = results.deepfake.match(/\d+\.\d+/);
+      if (match) return Math.round(Number.parseFloat(match[0]) * 100);
     }
 
-    return null
-  }
-
-  const resultStatus = getResultStatus()
-  const confidenceScore = getConfidenceScore()
-
-  const VideoResultsDisplay = () => {
-    if (!results || !results.video_analysis) return null
-
-    const { video_analysis, lip_sync_analysis } = results
-    const fakeFramesPercentage = (video_analysis.fake_frames_detected / video_analysis.total_frames_analyzed) * 100
-
-    return (
-      <div className="flex flex-col">
-        <div
-          className={cn(
-            "p-6 text-center",
-            fakeFramesPercentage > 30
-              ? "bg-destructive/10"
-              : fakeFramesPercentage > 10
-                ? "bg-amber-500/10"
-                : "bg-green-500/10",
-          )}
-        >
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-background">
-            {fakeFramesPercentage > 30 ? (
-              <AlertTriangle className="w-8 h-8 text-destructive" />
-            ) : fakeFramesPercentage > 10 ? (
-              <Info className="w-8 h-8 text-amber-500" />
-            ) : (
-              <CheckCircle className="w-8 h-8 text-green-500" />
-            )}
-          </div>
-
-          <h2 className="text-3xl font-bold mb-2">
-            {fakeFramesPercentage > 30
-              ? "Deepfake Detected"
-              : fakeFramesPercentage > 10
-                ? "Possible Manipulation"
-                : "Likely Authentic"}
-          </h2>
-
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            {fakeFramesPercentage > 30
-              ? "Our AI has detected significant signs of manipulation in this video."
-              : fakeFramesPercentage > 10
-                ? "Our AI has detected some potential signs of manipulation in this video."
-                : "Our AI analysis indicates this is likely an authentic video without significant signs of deepfake manipulation."}
-          </p>
-
-          <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-background">
-            <span className="text-sm font-medium">Fake Frames:</span>
-            <Badge
-              variant={fakeFramesPercentage > 30 ? "destructive" : fakeFramesPercentage > 10 ? "outline" : "default"}
-            >
-              {video_analysis.fake_frames_detected} / {video_analysis.total_frames_analyzed} (
-              {Math.round(fakeFramesPercentage)}%)
-            </Badge>
-          </div>
-        </div>
-
-        <div className="flex flex-col md:flex-row">
-          <div className="w-full md:w-1/2 p-6 border-r border-b">
-            <div className="aspect-video max-h-[400px] relative rounded-lg overflow-hidden border mb-4">
-              {preview && <video src={preview} controls className="w-full h-full object-cover" />}
-
-              {fakeFramesPercentage > 30 && (
-                <div className="absolute top-2 right-2">
-                  <Badge variant="destructive" className="text-xs px-2 py-1">
-                    FAKE
-                  </Badge>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 mt-4">
-              <Button variant="outline" size="sm" onClick={resetAnalysis} className="gap-2">
-                <X className="w-4 h-4" />
-                New Analysis
-              </Button>
-
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={generateVideoReport}
-                className="gap-2"
-                disabled={isGeneratingReport}
-              >
-                {isGeneratingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                Generate Report
-              </Button>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="secondary" size="sm" className="gap-2 ml-auto">
-                      <Shield className="w-4 h-4" />
-                      Protect Your Media
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Add protection to your own media</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          </div>
-
-          <div className="w-full md:w-1/2 p-6">
-            <Tabs defaultValue="summary">
-              <TabsList className="w-full mb-4">
-                <TabsTrigger value="summary" className="flex-1">
-                  Summary
-                </TabsTrigger>
-                <TabsTrigger value="frames" className="flex-1">
-                  Frame Analysis
-                </TabsTrigger>
-                <TabsTrigger value="lipsync" className="flex-1">
-                  Lip Sync
-                </TabsTrigger>
-                <TabsTrigger value="technical" className="flex-1">
-                  Technical Details
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="summary" className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Analysis Summary</h3>
-                  <p className="text-sm text-muted-foreground">
-                    {fakeFramesPercentage > 30
-                      ? "This video shows significant signs of AI manipulation consistent with deepfake technology. Multiple frames were flagged as potentially fake."
-                      : fakeFramesPercentage > 10
-                        ? "This video shows some signs of potential manipulation. A small number of frames were flagged as suspicious."
-                        : "This video appears to be authentic. Our analysis found natural patterns and consistent features throughout the video."}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 rounded-lg bg-muted">
-                    <h4 className="text-sm font-medium mb-1">Video Duration</h4>
-                    <p className="text-xs text-muted-foreground">{video_analysis.duration}</p>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-muted">
-                    <h4 className="text-sm font-medium mb-1">Frames Analyzed</h4>
-                    <p className="text-xs text-muted-foreground">{video_analysis.total_frames_analyzed}</p>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-muted">
-                    <h4 className="text-sm font-medium mb-1">Fake Frames</h4>
-                    <p
-                      className={cn(
-                        "text-xs",
-                        fakeFramesPercentage > 30
-                          ? "text-destructive"
-                          : fakeFramesPercentage > 10
-                            ? "text-amber-500"
-                            : "text-green-500",
-                      )}
-                    >
-                      {video_analysis.fake_frames_detected} ({Math.round(fakeFramesPercentage)}%)
-                    </p>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-muted">
-                    <h4 className="text-sm font-medium mb-1">Lip Sync Analysis</h4>
-                    <p className="text-xs text-muted-foreground">
-                      {typeof lip_sync_analysis === "object" && lip_sync_analysis.error
-                        ? "Analysis failed"
-                        : typeof lip_sync_analysis === "object" && lip_sync_analysis.fake_probability !== undefined
-                          ? lip_sync_analysis.fake_probability > 0.5
-                            ? "Potential mismatch detected"
-                            : "No issues detected"
-                          : typeof lip_sync_analysis === "number"
-                            ? lip_sync_analysis < 0.5
-                              ? "Potential mismatch detected"
-                              : "No issues detected"
-                            : "Analysis unavailable"}
-                    </p>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="frames" className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Frame-by-Frame Analysis</h3>
-                  <p className="text-sm text-muted-foreground">Detailed analysis of individual video frames.</p>
-                </div>
-
-                <div className="border rounded-md overflow-hidden">
-                  <div className="grid grid-cols-12 bg-muted p-2 text-xs font-medium">
-                    <div className="col-span-1">Frame</div>
-                    <div className="col-span-3">Timestamp</div>
-                    <div className="col-span-2">Result</div>
-                    <div className="col-span-3">Score</div>
-                    <div className="col-span-3">Status</div>
-                  </div>
-                  <div className="max-h-60 overflow-y-auto">
-                    {video_analysis.results.map((frame: any, index: any) => (
-                      <div
-                        key={index}
-                        className={cn(
-                          "grid grid-cols-12 p-2 text-xs border-t",
-                          frame.is_fake ? "bg-destructive/5" : "",
-                        )}
-                      >
-                        <div className="col-span-1">{frame.frame_number}</div>
-                        <div className="col-span-3">{frame.timestamp}</div>
-                        <div className="col-span-2">{frame.prediction}</div>
-                        <div className="col-span-3">{frame.fusion_score ? frame.fusion_score.toFixed(4) : "N/A"}</div>
-                        <div className="col-span-3">
-                          {frame.is_fake ? (
-                            <span className="inline-flex items-center text-destructive">
-                              <AlertTriangle className="w-3 h-3 mr-1" /> Suspicious
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center text-green-500">
-                              <CheckCircle className="w-3 h-3 mr-1" /> OK
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="lipsync" className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Lip Synchronization Analysis</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Analysis of audio-visual synchronization to detect potential deepfakes.
-                  </p>
-                </div>
-
-                {typeof lip_sync_analysis === "object" && lip_sync_analysis.error ? (
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm">{lip_sync_analysis.description || lip_sync_analysis.error}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 rounded-lg bg-muted">
-                        <h4 className="text-sm font-medium mb-1">Real Probability</h4>
-                        <div className="flex items-center">
-                          {typeof lip_sync_analysis === "object" ? (
-                            <>
-                              <Progress value={lip_sync_analysis.real_probability * 100} className="h-2 flex-1 mr-2" />
-                              <span className="text-xs">{Math.round(lip_sync_analysis.real_probability * 100)}%</span>
-                            </>
-                          ) : (
-                            <>
-                              <Progress
-                                value={typeof lip_sync_analysis === "number" ? lip_sync_analysis * 100 : 0}
-                                className="h-2 flex-1 mr-2"
-                              />
-                              <span className="text-xs">
-                                {typeof lip_sync_analysis === "number" ? Math.round(lip_sync_analysis * 100) : 0}%
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="p-4 rounded-lg bg-muted">
-                        <h4 className="text-sm font-medium mb-1">Fake Probability</h4>
-                        <div className="flex items-center">
-                          {typeof lip_sync_analysis === "object" ? (
-                            <>
-                              <Progress value={lip_sync_analysis.fake_probability * 100} className="h-2 flex-1 mr-2" />
-                              <span className="text-xs">{Math.round(lip_sync_analysis.fake_probability * 100)}%</span>
-                            </>
-                          ) : (
-                            <>
-                              <Progress
-                                value={typeof lip_sync_analysis === "number" ? (1 - lip_sync_analysis) * 100 : 0}
-                                className="h-2 flex-1 mr-2"
-                              />
-                              <span className="text-xs">
-                                {typeof lip_sync_analysis === "number" ? Math.round((1 - lip_sync_analysis) * 100) : 0}%
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="p-4 rounded-lg bg-muted">
-                      <h4 className="text-sm font-medium mb-1">Analysis Result</h4>
-                      <p className="text-sm">
-                        {typeof lip_sync_analysis === "object"
-                          ? lip_sync_analysis.description ||
-                            (lip_sync_analysis.fake_probability > 0.5
-                              ? "Potential lip sync mismatch detected, suggesting possible manipulation."
-                              : "No significant lip sync issues detected.")
-                          : typeof lip_sync_analysis === "number"
-                            ? lip_sync_analysis < 0.5
-                              ? "Potential lip sync mismatch detected, suggesting possible manipulation."
-                              : "No significant lip sync issues detected."
-                            : "Analysis unavailable"}
-                      </p>
-                    </div>
-
-                    {typeof lip_sync_analysis === "object" && lip_sync_analysis.processing_time_seconds && (
-                      <div className="p-4 rounded-lg bg-muted">
-                        <h4 className="text-sm font-medium mb-1">Processing Time</h4>
-                        <p className="text-sm">{lip_sync_analysis.processing_time_seconds} seconds</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="technical" className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className="text-lg font-medium">Technical Details</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Technical information about the video and analysis process.
-                  </p>
-                </div>
-
-                <Accordion type="single" collapsible className="w-full">
-                  <AccordionItem value="item-1">
-                    <AccordionTrigger>Video Properties</AccordionTrigger>
-                    <AccordionContent>
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div>File Type:</div>
-                        <div>{file?.type || "Unknown"}</div>
-                        <div>File Size:</div>
-                        <div>{file ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}</div>
-                        <div>Frame Rate:</div>
-                        <div>{video_analysis.fps} FPS</div>
-                        <div>Duration:</div>
-                        <div>{video_analysis.duration}</div>
-                        <div>Frames Analyzed:</div>
-                        <div>{video_analysis.total_frames_analyzed}</div>
-                        <div>Frame Interval:</div>
-                        <div>{video_analysis.frame_interval} second(s)</div>
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  <AccordionItem value="item-2">
-                    <AccordionTrigger>Detection Method</AccordionTrigger>
-                    <AccordionContent>
-                      <p className="text-sm text-muted-foreground">
-                        Our system uses a multi-stage approach to detect deepfakes:
-                      </p>
-                      <ul className="text-sm text-muted-foreground space-y-2 mt-2">
-                        <li>• Frame-by-frame analysis for visual inconsistencies</li>
-                        <li>• Lip synchronization analysis to detect audio-visual mismatches</li>
-                        <li>• Facial feature consistency checks across frames</li>
-                        <li>• Temporal coherence analysis</li>
-                      </ul>
-                    </AccordionContent>
-                  </AccordionItem>
-
-                  <AccordionItem value="item-3">
-                    <AccordionTrigger>Raw Analysis Data</AccordionTrigger>
-                    <AccordionContent>
-                      <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-40">
-                        {JSON.stringify(results, null, 2)}
-                      </pre>
-                    </AccordionContent>
-                  </AccordionItem>
-                </Accordion>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </div>
-      </div>
-    )
-  }
+    return 0;
+  };
 
   const generateReport = async () => {
-    if (!results) return
-
-    setIsGeneratingReport(true)
-
-    try {
-      const formData = new FormData()
-      if (file) {
-        formData.append("file", file)
-      }
-
-      formData.append("investigator_name", "AI Detection System")
-      formData.append("analysis_results", JSON.stringify(results))
-
-      const response = await fetch("https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/generate_report", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to generate report")
-      }
-
-      // Get the blob from the response
-      const blob = await response.blob()
-
-      // Create a URL for the blob
-      const url = window.URL.createObjectURL(blob)
-
-      // Create a temporary link element
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `DeepfakeReport_${Date.now()}.pdf`
-      document.body.appendChild(a)
-
-      // Click the link to download the file
-      a.click()
-
-      // Clean up
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-    } catch (err) {
-      console.error("Error generating report:", err)
-      setError(err instanceof Error ? err.message : "Failed to generate report")
-    } finally {
-      setIsGeneratingReport(false)
-    }
-  }
-
-  const generateVideoReport = async () => {
-    if (!results || !results.video_analysis) return
-
+    if (!results) return;
     setIsGeneratingReport(true);
 
     try {
-      // Prepare the data for video report generation
-      const reportData = {
-        analysis_results: results,  // Now contains all the enhanced data
-        investigator_name: "AI Detection System",
-        case_number: `VIDEO-${Date.now().toString(36).toUpperCase()}`,
-      };
+      const isVideo = !!results.video_analysis;
+      const endpoint = isVideo
+        ? "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/generate_video_report"
+        : "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/generate_report";
 
-      // Send request to backend for video report generation
-      const response = await fetch(
-        "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/generate_video_report",
-        {
+      const bodyData = isVideo
+        ? JSON.stringify({
+            analysis_results: results,
+            investigator_name: "AI Detection System",
+            case_number: `VIDEO-${Date.now().toString(36).toUpperCase()}`,
+          })
+        : (() => {
+            const fd = new FormData();
+            if (file) fd.append("file", file);
+            fd.append("investigator_name", "AI Detection System");
+            fd.append("analysis_results", JSON.stringify(results));
+            return fd;
+          })();
+
+      const response = await fetch(endpoint, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(reportData),
+        headers: isVideo ? { "Content-Type": "application/json" } : undefined,
+        body: bodyData,
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to generate video report");
-      }
+      if (!response.ok) throw new Error("Failed to generate report");
 
-      // Get the blob from the response
       const blob = await response.blob();
-
-      // Create a URL for the blob
       const url = window.URL.createObjectURL(blob);
-
-      // Create a temporary link element
       const a = document.createElement("a");
       a.href = url;
-      a.download = `VideoDeepfakeReport_${Date.now()}.pdf`;
+      a.download = `DeepfakeReport_${Date.now()}.pdf`;
       document.body.appendChild(a);
-
-      // Click the link to download the file
       a.click();
-
-      // Clean up
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      console.error("Error generating video report:", err);
-      setError(err instanceof Error ? err.message : "Failed to generate video report");
+      console.error("Error generating report:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to generate report"
+      );
     } finally {
       setIsGeneratingReport(false);
     }
-  }
+  };
+
+  const resultStatus = getResultStatus();
+  const confidence = getConfidenceScore();
 
   return (
-    <main className="min-h-screen flex flex-col bg-gradient-to-b from-background to-background/95">
+    <main className="min-h-screen flex flex-col bg-background">
       <Navbar />
 
       <div className="flex-1 container mx-auto px-4 py-24">
@@ -702,951 +351,606 @@ export default function DetectPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="max-w-5xl mx-auto"
+          className="max-w-6xl mx-auto"
         >
-          <div className="flex items-center space-x-4 mb-6">
-            <div className="p-3 rounded-full bg-primary/10">
-              <Search className="w-8 h-8 text-primary" />
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
+                <Search className="w-8 h-8 text-primary" />
+              </div>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
+                  Deepfake Detection
+                </h1>
+                <p className="text-muted-foreground">
+                  Analyze media for AI manipulation using advanced forensics
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-4xl font-space font-bold">Deepfake Detection</h1>
-              <p className="text-muted-foreground">Analyze images for AI manipulation</p>
-            </div>
+
+            {results && (
+              <Button
+                variant="outline"
+                onClick={resetAnalysis}
+                className="gap-2"
+              >
+                <Search className="w-4 h-4" />
+                New Analysis
+              </Button>
+            )}
           </div>
 
-          <Card className="mb-8 overflow-hidden border-2">
-            <CardContent className="p-0">
-              <AnimatePresence mode="wait">
-                {!file && !results ? (
-                  <motion.div
-                    key="upload"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <motion.div
-                      className={cn(
-                        "p-10 transition-all duration-300",
-                        isDragging ? "bg-primary/10 border-primary" : "bg-card",
-                      )}
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
-                    >
-                      <motion.div
-                        className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center"
-                        initial={{ borderColor: "rgba(0,0,0,0.1)" }}
-                        animate={{
-                          borderColor: isDragging ? "rgba(var(--primary-rgb), 0.5)" : "rgba(0,0,0,0.1)",
-                          boxShadow: isDragging ? "0 0 15px rgba(var(--primary-rgb), 0.2)" : "none",
-                        }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        <input
-                          type="file"
-                          className="hidden"
-                          id="file-upload"
-                          ref={fileInputRef}
-                          onChange={handleFileChange}
-                          accept="image/*,video/*"
-                        />
-                        <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
-                          <motion.div
-                            className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4"
-                            whileHover={{ scale: 1.05, backgroundColor: "rgba(var(--primary-rgb), 0.15)" }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <Upload className="w-10 h-10 text-primary" />
-                          </motion.div>
-                          <h3 className="text-xl font-medium mb-2">
-                            {isDragging ? "Drop your file here" : "Drag and drop your file here"}
-                          </h3>
-                          <p className="text-sm text-muted-foreground mb-6 max-w-md">
-                            Upload an image or video to analyze it for potential deepfake manipulation. We support JPG,
-                            PNG, WEBP for images and MP4, AVI, MOV for videos.
-                          </p>
-                          <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                            <Button size="lg" className="gap-2">
-                              <FileImage className="w-4 h-4" />
-                              Select File
-                            </Button>
-                          </motion.div>
-                        </label>
-                      </motion.div>
-                    </motion.div>
+          <AnimatePresence mode="wait">
+            {!file && !results ? (
+              <motion.div
+                key="upload"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <Card className="border-2 border-dashed shadow-sm">
+                  <CardContent className="p-0">
+                    <FileUploader
+                      onFileSelect={handleFileSelect}
+                      label="Upload Media for Analysis"
+                      description="Support for JPG, PNG, WEBP, MP4, AVI, MOV"
+                    />
+                  </CardContent>
+                </Card>
 
-                    {error && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive flex items-center gap-2"
-                      >
-                        <AlertTriangle className="w-5 h-5" />
-                        <span>{error}</span>
-                      </motion.div>
-                    )}
-                  </motion.div>
-                ) : isAnalyzing ? (
-                  <motion.div
-                    key="analyzing"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="p-10"
-                  >
-                    <div className="flex flex-col md:flex-row gap-8 items-center">
-                      <div className="w-full md:w-1/2 aspect-square md:aspect-auto md:max-h-[400px] relative rounded-lg overflow-hidden border">
-                        {preview && file?.type.startsWith("video/") ? (
-                          <video src={preview} className="w-full h-full object-cover" controls />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+                  <Card className="bg-card/50 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Shield className="w-5 h-5 text-primary" />
+                        Advanced Forensics
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        Multi-layered analysis checking for facial
+                        inconsistencies, lighting artifacts, and compression
+                        anomalies.
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-card/50 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Activity className="w-5 h-5 text-primary" />
+                        Real-time Processing
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        Fast and accurate detection powered by state-of-the-art
+                        deep learning models.
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-card/50 backdrop-blur-sm">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-lg">
+                        <Eye className="w-5 h-5 text-primary" />
+                        Visual Explanations
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <p className="text-sm text-muted-foreground">
+                        Get detailed heatmaps and frame-by-frame analysis to
+                        understand why media was flagged.
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+              </motion.div>
+            ) : isAnalyzing ? (
+              <motion.div
+                key="analyzing"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="max-w-2xl mx-auto"
+              >
+                <Card>
+                  <CardContent className="p-12">
+                    <AnalysisProgress
+                      steps={DETECTION_STEPS}
+                      currentStepIndex={currentStepIndex}
+                      progress={analysisProgress}
+                      title={
+                        file?.type.startsWith("video/")
+                          ? "Analyzing Video Frames"
+                          : "Scanning Image"
+                      }
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ) : !results ? (
+              // Preview State before analysis
+              <motion.div
+                key="preview"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+              >
+                <Card className="overflow-hidden">
+                  <div className="grid md:grid-cols-2 gap-0">
+                    <div className="bg-muted/30 p-8 flex items-center justify-center border-b md:border-b-0 md:border-r">
+                      <div className="relative max-w-full max-h-[500px] rounded-lg overflow-hidden shadow-lg">
+                        {file?.type.startsWith("video/") ? (
+                          <video
+                            src={preview!}
+                            controls
+                            className="max-w-full max-h-[400px]"
+                          />
                         ) : (
-                          preview && (
-                            <img
-                              src={preview || "/placeholder.svg"}
-                              alt="Preview"
-                              className="w-full h-full object-cover"
-                            />
-                          )
+                          <img
+                            src={preview!}
+                            alt="Preview"
+                            className="max-w-full max-h-[400px] object-contain"
+                          />
                         )}
-                        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center p-6">
-                          <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-                          <h3 className="text-xl font-medium mb-2">
-                          {file?.type.startsWith("video/") ? "Analyzing Video" : "Analyzing Image"}
-                          </h3>
-                          <p className="text-sm text-muted-foreground mb-4 text-center">
-                          Our AI is examining the {file?.type.startsWith("video/") ? "video" : "image"} for signs of manipulation. This may take a few moments.
-                          </p>
-                          <div className="w-full max-w-md">
-                          <Progress value={analysisProgress} className="h-2" />
-                          <p className="text-xs text-right mt-1 text-muted-foreground">
-                            {Math.round(analysisProgress)}%
-                          </p>
-                          </div>
+                      </div>
+                    </div>
+                    <div className="p-8 flex flex-col justify-center space-y-6">
+                      <div>
+                        <h2 className="text-2xl font-bold mb-2">
+                          Ready to Analyze
+                        </h2>
+                        <p className="text-muted-foreground">
+                          {file?.name} (
+                          {(file!.size / (1024 * 1024)).toFixed(2)} MB)
+                        </p>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>File integrity verified</span>
+                        </div>
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                          <span>
+                            Format supported (
+                            {file?.type.split("/")[1].toUpperCase()})
+                          </span>
                         </div>
                       </div>
 
-                      <div className="w-full md:w-1/2 space-y-6">
-                        <div className="space-y-2">
-                          <h3 className="text-xl font-medium">Detection Process</h3>
-                          <p className="text-sm text-muted-foreground">
-                            Our advanced AI model is analyzing your image through multiple detection layers:
-                          </p>
-                        </div>
-
-                        <div className="space-y-3">
-                          <motion.div
-                            className="flex items-center gap-3"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.1 }}
-                          >
-                            <motion.div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                analysisProgress > 20
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                              animate={{
-                                scale: analysisProgress > 20 ? [1, 1.2, 1] : 1,
-                                backgroundColor: analysisProgress > 20 ? "var(--primary)" : "hsl(var(--muted))",
-                              }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              {analysisProgress > 20 ? "✓" : "1"}
-                            </motion.div>
-                            <div className="flex-1">
-                              <p
-                                className={cn(
-                                  "text-sm font-medium",
-                                  analysisProgress > 20 ? "text-primary" : "text-muted-foreground",
-                                )}
-                              >
-                                Facial Analysis
-                              </p>
-                            </div>
-                          </motion.div>
-
-                          <motion.div
-                            className="flex items-center gap-3"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.2 }}
-                          >
-                            <motion.div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                analysisProgress > 50
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                              animate={{
-                                scale: analysisProgress > 50 ? [1, 1.2, 1] : 1,
-                                backgroundColor: analysisProgress > 50 ? "var(--primary)" : "hsl(var(--muted))",
-                              }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              {analysisProgress > 50 ? "✓" : "2"}
-                            </motion.div>
-                            <div className="flex-1">
-                              <p
-                                className={cn(
-                                  "text-sm font-medium",
-                                  analysisProgress > 50 ? "text-primary" : "text-muted-foreground",
-                                )}
-                              >
-                                Pattern Recognition
-                              </p>
-                            </div>
-                          </motion.div>
-
-                          <motion.div
-                            className="flex items-center gap-3"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.3 }}
-                          >
-                            <motion.div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                analysisProgress > 80
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                              animate={{
-                                scale: analysisProgress > 80 ? [1, 1.2, 1] : 1,
-                                backgroundColor: analysisProgress > 80 ? "var(--primary)" : "hsl(var(--muted))",
-                              }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              {analysisProgress > 80 ? "✓" : "3"}
-                            </motion.div>
-                            <div className="flex-1">
-                              <p
-                                className={cn(
-                                  "text-sm font-medium",
-                                  analysisProgress > 80 ? "text-primary" : "text-muted-foreground",
-                                )}
-                              >
-                                Metadata Verification
-                              </p>
-                            </div>
-                          </motion.div>
-
-                          <motion.div
-                            className="flex items-center gap-3"
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: 0.4 }}
-                          >
-                            <motion.div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                analysisProgress >= 100
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                              animate={{
-                                scale: analysisProgress >= 100 ? [1, 1.2, 1] : 1,
-                                backgroundColor: analysisProgress >= 100 ? "var(--primary)" : "hsl(var(--muted))",
-                              }}
-                              transition={{ duration: 0.3 }}
-                            >
-                              {analysisProgress >= 100 ? "✓" : "4"}
-                            </motion.div>
-                            <div className="flex-1">
-                              <p
-                                className={cn(
-                                  "text-sm font-medium",
-                                  analysisProgress >= 100 ? "text-primary" : "text-muted-foreground",
-                                )}
-                              >
-                                Final Assessment
-                              </p>
-                            </div>
-                          </motion.div>
-                        </div>
-
-                        <Button variant="outline" className="w-full" onClick={resetAnalysis}>
-                          Cancel Analysis
+                      <div className="flex gap-3 pt-4">
+                        <Button
+                          variant="outline"
+                          onClick={resetAnalysis}
+                          className="flex-1"
+                        >
+                          Cancel
+                        </Button>
+                        <Button onClick={analyzeMedia} className="flex-1 gap-2">
+                          <Search className="w-4 h-4" />
+                          Start Analysis
                         </Button>
                       </div>
                     </div>
-                  </motion.div>
-                ) : results ? (
-                  <motion.div
-                    key="results"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="p-0"
-                  >
-                    {!results || (results.video_analysis === undefined && !results.deepfake) ? (
-                      <div className="p-10 text-center">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-destructive/10">
-                          <AlertTriangle className="w-8 h-8 text-destructive" />
-                        </div>
-
-                        <h2 className="text-3xl font-bold mb-2">Detection Failed</h2>
-
-                        <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
-                          We couldn't properly analyze this {file?.type.startsWith("video/") ? "video" : "image"}. This
-                          could be due to:
-                        </p>
-
-                        <ul className="text-left max-w-md mx-auto mb-8 space-y-2 text-sm text-muted-foreground">
-                          <li className="flex items-start gap-2">
-                            <span className="text-destructive mt-0.5">•</span>
-                            <span>
-                              No {file?.type.startsWith("video/") ? "analyzable content" : "face detected"} in the{" "}
-                              {file?.type.startsWith("video/") ? "video" : "image"}
-                            </span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-destructive mt-0.5">•</span>
-                            <span>File format not properly supported</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-destructive mt-0.5">•</span>
-                            <span>Server processing error</span>
-                          </li>
-                        </ul>
-
-                        <Button variant="outline" onClick={resetAnalysis} className="gap-2">
-                          <X className="w-4 h-4" />
-                          Try Another {file?.type.startsWith("video/") ? "Video" : "Image"}
-                        </Button>
+                  </div>
+                </Card>
+              </motion.div>
+            ) : (
+              // Results State
+              <motion.div
+                key="results"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
+              >
+                {/* Main Verdict Card */}
+                <Card
+                  className={cn(
+                    "border-l-4 overflow-hidden",
+                    resultStatus === "fake"
+                      ? "border-l-destructive"
+                      : resultStatus === "suspicious"
+                      ? "border-l-amber-500"
+                      : "border-l-green-500"
+                  )}
+                >
+                  <CardContent className="p-8">
+                    <div className="flex flex-col md:flex-row items-center gap-8">
+                      <div
+                        className={cn(
+                          "w-24 h-24 rounded-full flex items-center justify-center flex-shrink-0",
+                          resultStatus === "fake"
+                            ? "bg-destructive/10 text-destructive"
+                            : resultStatus === "suspicious"
+                            ? "bg-amber-500/10 text-amber-500"
+                            : "bg-green-500/10 text-green-500"
+                        )}
+                      >
+                        {resultStatus === "fake" ? (
+                          <AlertTriangle className="w-12 h-12" />
+                        ) : resultStatus === "suspicious" ? (
+                          <Info className="w-12 h-12" />
+                        ) : (
+                          <CheckCircle className="w-12 h-12" />
+                        )}
                       </div>
-                    ) : results.video_analysis ? (
-                      <VideoResultsDisplay />
-                    ) : (
-                      // Original image results display
-                      <div className="flex flex-col">
+
+                      <div className="flex-1 text-center md:text-left space-y-2">
+                        <h2 className="text-3xl font-bold">
+                          {resultStatus === "fake"
+                            ? "Deepfake Detected"
+                            : resultStatus === "suspicious"
+                            ? "Potential Manipulation"
+                            : "Likely Authentic"}
+                        </h2>
+                        <p className="text-muted-foreground text-lg">
+                          {resultStatus === "fake"
+                            ? "High probability of AI manipulation detected."
+                            : resultStatus === "suspicious"
+                            ? "Some anomalies detected, manual review recommended."
+                            : "No significant signs of manipulation found."}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-col items-center gap-2 min-w-[150px]">
+                        <div className="text-sm font-medium text-muted-foreground">
+                          Confidence Score
+                        </div>
                         <div
                           className={cn(
-                            "p-6 text-center",
+                            "text-4xl font-bold",
                             resultStatus === "fake"
-                              ? "bg-destructive/10"
-                              : resultStatus === "real"
-                                ? "bg-green-500/10"
-                                : "bg-amber-500/10",
+                              ? "text-destructive"
+                              : resultStatus === "suspicious"
+                              ? "text-amber-500"
+                              : "text-green-500"
                           )}
                         >
-                          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-background">
-                            {resultStatus === "fake" ? (
-                              <AlertTriangle className="w-8 h-8 text-destructive" />
-                            ) : resultStatus === "real" ? (
-                              <CheckCircle className="w-8 h-8 text-green-500" />
-                            ) : (
-                              <Info className="w-8 h-8 text-amber-500" />
-                            )}
-                          </div>
+                          {confidence}%
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-                          <h2 className="text-3xl font-bold mb-2">
-                            {resultStatus === "fake"
-                              ? "Deepfake Detected"
-                              : resultStatus === "real"
-                                ? "Authentic Image"
-                                : "Analysis Inconclusive"}
-                          </h2>
-
-                          <p className="text-muted-foreground max-w-2xl mx-auto">
-                            {resultStatus === "fake"
-                              ? "Our AI has detected signs of manipulation in this image. It appears to be artificially generated or modified."
-                              : resultStatus === "real"
-                                ? "Our AI analysis indicates this is likely an authentic image without signs of deepfake manipulation."
-                                : "Our AI couldn't determine with confidence whether this image is real or fake."}
-                          </p>
-
-                          {confidenceScore !== null && (
-                            <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-background">
-                              <span className="text-sm font-medium">Confidence:</span>
-                              <motion.div
-                                initial={{ scale: 0.9, opacity: 0 }}
-                                animate={{ scale: 1, opacity: 1 }}
-                                transition={{ delay: 0.3, type: "spring" }}
-                              >
-                                <Badge
-                                  variant={
-                                    resultStatus === "fake"
-                                      ? "destructive"
-                                      : resultStatus === "real"
-                                        ? "default"
-                                        : "outline"
-                                  }
-                                >
-                                  {Math.round(confidenceScore)}%
-                                </Badge>
-                              </motion.div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left Column: Visuals */}
+                  <div className="lg:col-span-1 space-y-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Analyzed Media</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="rounded-lg overflow-hidden border bg-muted/50 relative">
+                          {file?.type.startsWith("video/") ? (
+                            <video
+                              src={preview!}
+                              controls
+                              className="w-full h-auto"
+                            />
+                          ) : (
+                            <img
+                              src={preview!}
+                              alt="Analyzed"
+                              className="w-full h-auto"
+                            />
+                          )}
+                          {resultStatus === "fake" && (
+                            <div className="absolute top-2 right-2">
+                              <Badge variant="destructive">FAKE</Badge>
                             </div>
                           )}
                         </div>
+                      </CardContent>
+                    </Card>
 
-                        <div className="flex flex-col md:flex-row">
-                          <div className="w-full md:w-1/2 p-6 border-r border-b">
-                            <div className="space-y-4">
-                              <div className="aspect-square max-h-[400px] relative rounded-lg overflow-hidden border">
-                                {preview && (
-                                  <img
-                                    src={preview || "/placeholder.svg"}
-                                    alt="Analyzed image"
-                                    className="w-full h-full object-cover"
-                                  />
-                                )}
+                    {/* Heatmaps for Images */}
+                    {results.segmented && (
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>AI Heatmaps</CardTitle>
+                          <CardDescription>
+                            Visualizing manipulated regions
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                          {results.segmented.LIME?.overlay && (
+                            <div>
+                              <div className="text-xs font-medium mb-2 text-muted-foreground">
+                                LIME Analysis
+                              </div>
+                              <div className="rounded-lg overflow-hidden border">
+                                <img
+                                  src={results.segmented.LIME.overlay}
+                                  alt="LIME"
+                                  className="w-full"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          {results.segmented["GradCAM++"]?.overlay && (
+                            <div>
+                              <div className="text-xs font-medium mb-2 text-muted-foreground">
+                                GradCAM++ Analysis
+                              </div>
+                              <div className="rounded-lg overflow-hidden border">
+                                <img
+                                  src={results.segmented["GradCAM++"].overlay}
+                                  alt="GradCAM"
+                                  className="w-full"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )}
 
-                                {resultStatus === "fake" && (
-                                  <div className="absolute top-2 right-2">
-                                    <Badge variant="destructive" className="text-xs px-2 py-1">
-                                      FAKE
-                                    </Badge>
-                                  </div>
+                    <div className="flex flex-col gap-3">
+                      <Button
+                        onClick={generateReport}
+                        disabled={isGeneratingReport}
+                        className="w-full gap-2"
+                      >
+                        {isGeneratingReport ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <FileText className="w-4 h-4" />
+                        )}
+                        Download Full Report
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        onClick={() => router.push("/protect")}
+                        className="w-full gap-2"
+                      >
+                        <Shield className="w-4 h-4" />
+                        Protect This Media
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Detailed Analysis */}
+                  <div className="lg:col-span-2">
+                    <Tabs defaultValue="details" className="w-full">
+                      <TabsList className="w-full justify-start">
+                        <TabsTrigger value="details">
+                          Analysis Details
+                        </TabsTrigger>
+                        {results.video_analysis && (
+                          <TabsTrigger value="frames">
+                            Frame Analysis
+                          </TabsTrigger>
+                        )}
+                        {results.lip_sync_analysis && (
+                          <TabsTrigger value="lipsync">Lip Sync</TabsTrigger>
+                        )}
+                        <TabsTrigger value="metadata">Metadata</TabsTrigger>
+                      </TabsList>
+
+                      <TabsContent value="details" className="space-y-4 mt-4">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>Detailed Findings</CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-6">
+                            {results.report ? (
+                              <div className="space-y-4">
+                                {[
+                                  "Visual Content Analysis",
+                                  "Anomaly Detection",
+                                  "Deep Learning Model Evaluation",
+                                ].map(
+                                  (key) =>
+                                    results.report[key] && (
+                                      <div key={key} className="space-y-2">
+                                        <h4 className="font-semibold text-sm text-primary">
+                                          {key}
+                                        </h4>
+                                        <p className="text-sm text-muted-foreground leading-relaxed">
+                                          {results.report[key]}
+                                        </p>
+                                      </div>
+                                    )
                                 )}
                               </div>
+                            ) : (
+                              <div className="text-center py-8 text-muted-foreground">
+                                Detailed report generation unavailable.
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
 
-                              {results?.segmented && (
-                                <div className="space-y-4 mt-4">
-                                  <h4 className="text-sm font-medium">AI Visualizations</h4>
-
-                                  {results?.segmented?.LIME?.overlay && (
-                                    <div>
-                                      <h5 className="text-xs font-medium mb-1 text-primary">LIME Analysis</h5>
-                                      <div className="aspect-square max-h-[250px] rounded-lg overflow-hidden border">
-                                        <img
-                                          src={`${results?.segmented?.LIME?.overlay}`}
-                                          alt="LIME visualization"
-                                          className="w-full h-full object-cover"
-                                        />
-                                      </div>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        LIME highlights regions that influenced the detection decision
-                                      </p>
+                        {Array.isArray(results.deepfake) && (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Model Confidence</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-4">
+                                {results.deepfake.map((res, idx) => (
+                                  <div key={idx} className="space-y-1">
+                                    <div className="flex justify-between text-sm">
+                                      <span>{res.label}</span>
+                                      <span className="font-medium">
+                                        {(res.score * 100).toFixed(1)}%
+                                      </span>
                                     </div>
-                                  )}
+                                    <Progress
+                                      value={res.score * 100}
+                                      className={cn(
+                                        "h-2",
+                                        res.label.toLowerCase().includes("fake")
+                                          ? "bg-destructive/20"
+                                          : "bg-green-500/20"
+                                      )}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </TabsContent>
 
-                                  {results?.segmented?.["GradCAM++"]?.overlay && (
-                                    <div>
-                                      <h5 className="text-xs font-medium mb-1 text-primary">GradCAM++ Analysis</h5>
-                                      <div className="aspect-square max-h-[250px] rounded-lg overflow-hidden border">
-                                        <img
-                                          src={`${results?.segmented?.["GradCAM++"]?.overlay}`}
-                                          alt="GradCAM++ visualization"
-                                          className="w-full h-full object-cover"
-                                        />
+                      {results.video_analysis && (
+                        <TabsContent value="frames" className="mt-4">
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Frame-by-Frame Analysis</CardTitle>
+                              <CardDescription>
+                                {results.video_analysis.fake_frames_detected}{" "}
+                                suspicious frames detected out of{" "}
+                                {results.video_analysis.total_frames_analyzed}{" "}
+                                analyzed.
+                              </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="rounded-md border">
+                                <div className="grid grid-cols-4 bg-muted p-3 text-xs font-medium">
+                                  <div>Time</div>
+                                  <div>Frame</div>
+                                  <div>Score</div>
+                                  <div>Status</div>
+                                </div>
+                                <div className="max-h-[400px] overflow-y-auto">
+                                  {results.video_analysis.results.map(
+                                    (frame, idx) => (
+                                      <div
+                                        key={idx}
+                                        className={cn(
+                                          "grid grid-cols-4 p-3 text-xs border-t items-center",
+                                          frame.is_fake
+                                            ? "bg-destructive/5"
+                                            : ""
+                                        )}
+                                      >
+                                        <div>{frame.timestamp}</div>
+                                        <div>{frame.frame_number}</div>
+                                        <div>
+                                          {frame.fusion_score?.toFixed(3) ||
+                                            "N/A"}
+                                        </div>
+                                        <div>
+                                          {frame.is_fake ? (
+                                            <Badge
+                                              variant="destructive"
+                                              className="text-[10px] h-5"
+                                            >
+                                              FAKE
+                                            </Badge>
+                                          ) : (
+                                            <Badge
+                                              variant="outline"
+                                              className="text-[10px] h-5 text-green-600 border-green-200"
+                                            >
+                                              REAL
+                                            </Badge>
+                                          )}
+                                        </div>
                                       </div>
-                                      <p className="text-xs text-muted-foreground mt-1">
-                                        GradCAM++ highlights regions of potential manipulation
-                                      </p>
-                                    </div>
+                                    )
                                   )}
                                 </div>
-                              )}
-                            </div>
-
-                            <div className="flex flex-wrap gap-2 justify-between">
-                              <Button variant="outline" size="sm" onClick={resetAnalysis} className="gap-2">
-                                <X className="w-4 h-4" />
-                                New Analysis
-                              </Button>
-
-                              <div className="flex gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={generateReport}
-                                  className="gap-2"
-                                  disabled={isGeneratingReport}
-                                >
-                                  {isGeneratingReport ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <FileText className="w-4 h-4" />
-                                  )}
-                                  Generate Report
-                                </Button>
-
-                                <TooltipProvider>
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Button variant="secondary" size="sm" className="gap-2">
-                                        <Shield className="w-4 h-4" />
-                                        Protect Your Media
-                                      </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                      <p>Add protection to your own media</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                </TooltipProvider>
                               </div>
-                            </div>
-                          </div>
-
-                          <div className="w-full md:w-1/2 p-6">
-                            <Tabs defaultValue="summary">
-                              <TabsList className="w-full mb-4">
-                                <TabsTrigger value="summary" className="flex-1">
-                                  Summary
-                                </TabsTrigger>
-                                <TabsTrigger value="technical" className="flex-1">
-                                  Technical Details
-                                </TabsTrigger>
-                                <TabsTrigger value="metadata" className="flex-1">
-                                  Metadata
-                                </TabsTrigger>
-                                <TabsTrigger value="report" className="flex-1">
-                                  Analysis Report
-                                </TabsTrigger>
-                              </TabsList>
-
-                              <AnimatePresence mode="wait">
-                                {/* Wrap each TabsContent with motion.div */}
-                                <motion.div
-                                  key="tab-content"
-                                  initial={{ opacity: 0, y: 10 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  exit={{ opacity: 0, y: -10 }}
-                                  transition={{ duration: 0.2 }}
-                                >
-                                  {/* Your TabsContent components here */}
-                                  <TabsContent value="summary" className="space-y-4">
-                                    <div className="space-y-2">
-                                      <h3 className="text-lg font-medium">Analysis Summary</h3>
-                                      {!results || !results.deepfake ? (
-                                        <div className="p-4 bg-destructive/10 rounded-lg text-destructive flex items-center gap-2">
-                                          <AlertTriangle className="w-5 h-5" />
-                                          <p className="text-sm">
-                                            Detection failed. No valid results were returned from the analysis.
-                                          </p>
-                                        </div>
-                                      ) : (
-                                        <p className="text-sm text-muted-foreground">
-                                          {resultStatus === "fake"
-                                            ? "This image shows signs of AI manipulation consistent with deepfake technology. The analysis detected inconsistencies in facial features, lighting, and texture patterns."
-                                            : resultStatus === "real"
-                                              ? "This image appears to be authentic. Our analysis found natural patterns and consistent features throughout the image."
-                                              : "The analysis was unable to conclusively determine if this image is real or fake. There may be some unusual patterns, but they're not definitive indicators of manipulation."}
-                                        </p>
-                                      )}
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4">
-                                      <div className="p-4 rounded-lg bg-muted">
-                                        <h4 className="text-sm font-medium mb-1">File Type</h4>
-                                        <p className="text-xs text-muted-foreground">{file?.type || "Unknown"}</p>
-                                      </div>
-
-                                      <div className="p-4 rounded-lg bg-muted">
-                                        <h4 className="text-sm font-medium mb-1">File Size</h4>
-                                        <p className="text-xs text-muted-foreground">
-                                          {file ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}
-                                        </p>
-                                      </div>
-
-                                      <div className="p-4 rounded-lg bg-muted">
-                                        <h4 className="text-sm font-medium mb-1">Analysis Result</h4>
-                                        <p
-                                          className={cn(
-                                            "text-xs",
-                                            !results || !results.deepfake
-                                              ? "text-destructive"
-                                              : resultStatus === "fake"
-                                                ? "text-destructive"
-                                                : resultStatus === "real"
-                                                  ? "text-green-500"
-                                                  : "text-amber-500",
-                                          )}
-                                        >
-                                          {!results || !results.deepfake
-                                            ? "Detection Failed"
-                                            : resultStatus === "fake"
-                                              ? "Deepfake Detected"
-                                              : resultStatus === "real"
-                                                ? "Authentic Image"
-                                                : "Inconclusive"}
-                                        </p>
-                                      </div>
-
-                                      <div className="p-4 rounded-lg bg-muted">
-                                        <h4 className="text-sm font-medium mb-1">Confidence Score</h4>
-                                        <p className="text-xs text-muted-foreground">
-                                          {confidenceScore !== null ? `${Math.round(confidenceScore)}%` : "N/A"}
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    {Array.isArray(results?.deepfake) && (
-                                      <motion.div
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: 0.2 }}
-                                        className="p-4 rounded-lg bg-muted"
-                                      >
-                                        <h4 className="text-sm font-medium mb-2">Detailed Model Results</h4>
-                                        <div className="space-y-2">
-                                          {results.deepfake.map((result:any, index:any) => (
-                                            <div key={index} className="flex justify-between items-center">
-                                              <span className="text-xs">{result.label}</span>
-                                              <div className="flex-1 mx-4">
-                                                <Progress value={result.score * 100} className="h-1" />
-                                              </div>
-                                              <span className="text-xs font-medium">
-                                                {(result.score * 100).toFixed(1)}%
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </motion.div>
-                                    )}
-                                  </TabsContent>
-
-                                  <TabsContent value="technical" className="space-y-4">
-                                    <div className="space-y-2">
-                                      <h3 className="text-lg font-medium">Technical Analysis</h3>
-                                      <p className="text-sm text-muted-foreground">
-                                        Detailed technical information about the analysis process and findings.
-                                      </p>
-                                    </div>
-
-                                    <Accordion type="single" collapsible className="w-full">
-                                      <AccordionItem value="item-1">
-                                        <AccordionTrigger>Detection Method</AccordionTrigger>
-                                        <AccordionContent>
-                                          <p className="text-sm text-muted-foreground">
-                                            Our system uses a fusion-based approach that combines multiple AI models to
-                                            detect inconsistencies in images. The primary detection results were:
-                                          </p>
-                                          {Array.isArray(results?.deepfake) ? (
-                                            <div className="mt-2 space-y-2">
-                                              {results.deepfake.map((result :any, index:any) => (
-                                                <div
-                                                  key={index}
-                                                  className="flex justify-between text-sm p-2 bg-muted/50 rounded-md"
-                                                >
-                                                  <span>{result.label}</span>
-                                                  <span className="font-medium">
-                                                    {(result.score * 100).toFixed(2)}%
-                                                  </span>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          ) : (
-                                            <p className="text-sm mt-2">{results?.deepfake || "N/A"}</p>
-                                          )}
-                                        </AccordionContent>
-                                      </AccordionItem>
-
-                                      <AccordionItem value="item-2">
-                                        <AccordionTrigger>Analysis Factors</AccordionTrigger>
-                                        <AccordionContent>
-                                          <ul className="text-sm text-muted-foreground space-y-2">
-                                            <li>• Facial feature consistency</li>
-                                            <li>• Texture and pattern analysis</li>
-                                            <li>• Lighting and shadow consistency</li>
-                                            <li>• Metadata verification</li>
-                                          </ul>
-                                        </AccordionContent>
-                                      </AccordionItem>
-
-                                      <AccordionItem value="item-3">
-                                        <AccordionTrigger>Raw Detection Data</AccordionTrigger>
-                                        <AccordionContent>
-                                          <pre className="text-xs bg-muted p-3 rounded overflow-auto max-h-40">
-                                            {JSON.stringify(results, null, 2)}
-                                          </pre>
-                                        </AccordionContent>
-                                      </AccordionItem>
-                                    </Accordion>
-                                  </TabsContent>
-
-                                  <TabsContent value="metadata" className="space-y-4">
-                                    <div className="space-y-2">
-                                      <h3 className="text-lg font-medium">Image Metadata</h3>
-                                      <p className="text-sm text-muted-foreground">
-                                        Metadata can provide clues about an image's authenticity and origin.
-                                      </p>
-                                    </div>
-
-                                    {results?.manifest && typeof results.manifest === "object" ? (
-                                      <div className="bg-muted rounded-lg p-4 max-h-80 overflow-auto text-white">
-                                        <ReactJson src={results.manifest} theme="monokai" />
-                                      </div>
-                                    ) : (
-                                      <div className="bg-muted rounded-lg p-4 text-center">
-                                        <p className="text-sm text-muted-foreground">No metadata available</p>
-                                      </div>
-                                    )}
-                                  </TabsContent>
-
-                                  <TabsContent value="report" className="space-y-4">
-                                    <div className="space-y-2">
-                                      <h3 className="text-lg font-medium">AI Analysis Report</h3>
-                                      <p className="text-sm text-muted-foreground">
-                                        Comprehensive AI analysis of the image with detailed findings.
-                                      </p>
-                                    </div>
-
-                                    {results?.report ? (
-                                      <div className="space-y-4">
-                                        {/* Visual Content Analysis */}
-                                        <Card className="overflow-hidden">
-                                          <CardHeader className="bg-muted/30 py-3">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                              <Search className="h-4 w-4" />
-                                              Visual Content Analysis
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="p-4">
-                                            <div className="text-sm whitespace-pre-line">
-                                              {results.report["Visual Content Analysis"]}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-
-                                        {/* Anomaly Detection */}
-                                        <Card className="overflow-hidden">
-                                          <CardHeader className="bg-muted/30 py-3">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                              <AlertTriangle className="h-4 w-4" />
-                                              Anomaly Detection
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="p-4">
-                                            <div className="text-sm whitespace-pre-line">
-                                              {results.report["Anomaly Detection"]}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-
-                                        {/* Text Extraction */}
-                                        <Card className="overflow-hidden">
-                                          <CardHeader className="bg-muted/30 py-3">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                              <FileImage className="h-4 w-4" />
-                                              Text Extraction
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="p-4">
-                                            <div className="text-sm whitespace-pre-line">
-                                              {results.report["Text Extraction"]}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-
-                                        {/* Deep Learning Evaluation */}
-                                        <Card className="overflow-hidden">
-                                          <CardHeader className="bg-muted/30 py-3">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                              <Gauge className="h-4 w-4" />
-                                              Deep Learning Evaluation
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="p-4">
-                                            <div className="text-sm whitespace-pre-line">
-                                              {results.report["Deep Learning Model Evaluation"]}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-
-                                        {/* Additional Context */}
-                                        <Card className="overflow-hidden">
-                                          <CardHeader className="bg-muted/30 py-3">
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                              <Info className="h-4 w-4" />
-                                              Additional Context
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="p-4">
-                                            <div className="text-sm whitespace-pre-line">
-                                              {results.report["Additional Context"]}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-
-                                        {/* Final Verdict */}
-                                        <Card
-                                          className={cn(
-                                            resultStatus === "fake"
-                                              ? "bg-destructive/10 border-destructive/30"
-                                              : resultStatus === "real"
-                                                ? "bg-green-500/10 border-green-500/30"
-                                                : "bg-amber-500/10 border-amber-500/30",
-                                            "overflow-hidden",
-                                          )}
-                                        >
-                                          <CardHeader
-                                            className={cn(
-                                              resultStatus === "fake"
-                                                ? "bg-destructive/20"
-                                                : resultStatus === "real"
-                                                  ? "bg-green-500/20"
-                                                  : "bg-amber-500/20",
-                                              "py-3",
-                                            )}
-                                          >
-                                            <CardTitle className="text-base flex items-center gap-2">
-                                              {resultStatus === "fake" ? (
-                                                <AlertTriangle className="h-4 w-4 text-destructive" />
-                                              ) : resultStatus === "real" ? (
-                                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                              ) : (
-                                                <Info className="h-4 w-4 text-amber-500" />
-                                              )}
-                                              Final Summary and Verdict
-                                            </CardTitle>
-                                          </CardHeader>
-                                          <CardContent className="p-4">
-                                            <div className="text-sm whitespace-pre-line font-medium">
-                                              {results.report["Final Summary and Verdict"]}
-                                            </div>
-                                          </CardContent>
-                                        </Card>
-                                      </div>
-                                    ) : (
-                                      <div className="bg-muted rounded-lg p-4 text-center">
-                                        <p className="text-sm text-muted-foreground">No analysis report available</p>
-                                      </div>
-                                    )}
-                                  </TabsContent>
-                                </motion.div>
-                              </AnimatePresence>
-                            </Tabs>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                ) : null}
-              </AnimatePresence>
-            </CardContent>
-
-            {file && !results && !isAnalyzing && (
-              <CardFooter className="p-6 border-t bg-muted/50">
-                <div className="flex flex-col sm:flex-row w-full gap-4 items-center">
-                  <div className="flex-1 flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-md overflow-hidden border bg-muted">
-                      {preview && (
-                        <img src={preview || "/placeholder.svg"} alt="Preview" className="w-full h-full object-cover" />
+                            </CardContent>
+                          </Card>
+                        </TabsContent>
                       )}
-                    </div>
-                    <div>
-                      <p className="font-medium truncate max-w-[200px] sm:max-w-xs">{file?.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {file ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : ""}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex gap-2 w-full sm:w-auto">
-                    <Button variant="outline" className="flex-1 sm:flex-initial" onClick={resetAnalysis}>
-                      Cancel
-                    </Button>
-                    <Button className="flex-1 sm:flex-initial gap-2" onClick={analyzeMedia}>
-                      <Search className="w-4 h-4" />
-                      Analyze {file?.type.startsWith("video/") ? "Video" : "Image"}
-                    </Button>
+                      {results.lip_sync_analysis && (
+                        <TabsContent value="lipsync" className="mt-4">
+                          <Card>
+                            <CardHeader>
+                              <CardTitle>Lip Synchronization</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              {typeof results.lip_sync_analysis === "object" ? (
+                                <div className="space-y-6">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 rounded-lg bg-muted/50 text-center">
+                                      <div className="text-sm text-muted-foreground mb-1">
+                                        Real Probability
+                                      </div>
+                                      <div className="text-2xl font-bold text-green-500">
+                                        {(
+                                          results.lip_sync_analysis
+                                            .real_probability * 100
+                                        ).toFixed(1)}
+                                        %
+                                      </div>
+                                    </div>
+                                    <div className="p-4 rounded-lg bg-muted/50 text-center">
+                                      <div className="text-sm text-muted-foreground mb-1">
+                                        Fake Probability
+                                      </div>
+                                      <div className="text-2xl font-bold text-destructive">
+                                        {(
+                                          results.lip_sync_analysis
+                                            .fake_probability * 100
+                                        ).toFixed(1)}
+                                        %
+                                      </div>
+                                    </div>
+                                  </div>
+                                  {results.lip_sync_analysis.description && (
+                                    <p className="text-sm text-muted-foreground bg-muted p-4 rounded-lg">
+                                      {results.lip_sync_analysis.description}
+                                    </p>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-center p-4">
+                                  <div className="text-2xl font-bold mb-2">
+                                    {(results.lip_sync_analysis * 100).toFixed(
+                                      1
+                                    )}
+                                    %
+                                  </div>
+                                  <p className="text-sm text-muted-foreground">
+                                    Sync Confidence Score
+                                  </p>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        </TabsContent>
+                      )}
+
+                      <TabsContent value="metadata" className="mt-4">
+                        <Card>
+                          <CardHeader>
+                            <CardTitle>File Metadata</CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            {results.manifest ? (
+                              <div className="rounded-lg overflow-hidden border">
+                                <ReactJson
+                                  src={results.manifest}
+                                  theme="monokai"
+                                  style={{ padding: "20px", fontSize: "12px" }}
+                                  displayDataTypes={false}
+                                />
+                              </div>
+                            ) : (
+                              <div className="text-center py-8 text-muted-foreground">
+                                No metadata manifest available.
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      </TabsContent>
+                    </Tabs>
                   </div>
                 </div>
-
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive flex items-center gap-2"
-                  >
-                    <AlertTriangle className="w-5 h-5" />
-                    <span>{error}</span>
-                  </motion.div>
-                )}
-              </CardFooter>
+              </motion.div>
             )}
-          </Card>
-
-          <motion.div
-            className="grid grid-cols-1 md:grid-cols-3 gap-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3, staggerChildren: 0.1 }}
-          >
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              whileHover={{ y: -5, boxShadow: "0 10px 30px rgba(0,0,0,0.1)" }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-primary" />
-                    How It Works
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Our deepfake detection system uses advanced AI to analyze images for signs of manipulation. The
-                    system examines facial features, lighting, and texture patterns to identify inconsistencies.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              whileHover={{ y: -5, boxShadow: "0 10px 30px rgba(0,0,0,0.1)" }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileImage className="w-5 h-5 text-primary" />
-                    Supported Formats
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline">JPG</Badge>
-                    <Badge variant="outline">JPEG</Badge>
-                    <Badge variant="outline">PNG</Badge>
-                    <Badge variant="outline">WEBP</Badge>
-                    <Badge variant="outline">MP4</Badge>
-                    <Badge variant="outline">MOV</Badge>
-                    <Badge variant="outline">AVI</Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6 }}
-              whileHover={{ y: -5, boxShadow: "0 10px 30px rgba(0,0,0,0.1)" }}
-            >
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Info className="w-5 h-5 text-primary" />
-                    Privacy
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">
-                    Your uploads are processed securely and not stored permanently. We respect your privacy and do not
-                    share your data with third parties.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
+          </AnimatePresence>
         </motion.div>
       </div>
-
       <Footer />
     </main>
-  )
+  );
 }
-
