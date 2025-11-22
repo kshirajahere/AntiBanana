@@ -1,5 +1,6 @@
 torch
 torchvision
+torchaudio
 transformers
 opencv-python
 scipy

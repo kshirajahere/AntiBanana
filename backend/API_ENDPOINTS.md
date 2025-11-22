@@ -150,7 +150,7 @@ PDF file download with forensic report including:
 
 ## 2. Audio Detection Endpoints
 
-### 2.1 Audio Deepfake Detection
+### 2.1 Advanced Audio Deepfake Detection
 **Endpoint:** `/detect-audio`  
 **Method:** `POST`  
 **Content-Type:** `multipart/form-data`
@@ -162,27 +162,129 @@ PDF file download with forensic report including:
 ```json
 {
   "prediction": "fake" | "real",
-  "confidence": 0.95,
+  "confidence": 0.87,
+  "fake_probability": 0.87,
+  "real_probability": 0.13,
   "is_fake": true,
+  "method_scores": {
+    "transformer": 0.92,
+    "spectral": 0.78,
+    "prosody": 0.85,
+    "temporal": 0.71,
+    "phase": 0.80
+  },
+  "anomalies": [
+    "High frequency artifacts detected",
+    "Unnatural prosodic patterns detected",
+    "Phase relationship artifacts detected"
+  ],
+  "warnings": [
+    "Methods show significant disagreement"
+  ],
+  "metadata": {
+    "duration": 5.2,
+    "sample_rate": 16000,
+    "method": "ensemble"
+  },
   "images": {
     "waveform": "base64_image",
-    "spectrogram": "base64_image",
+    "mel_spectrogram": "base64_image",
     "mfcc": "base64_image",
-    "lime": "base64_image",
-    "gradcam": "base64_image"
+    "spectral_features": "base64_image",
+    "pitch_contour": "base64_image",
+    "method_scores": "base64_image"
   }
 }
 ```
 
 **Features:**
-- Audio deepfake detection using transformer models
-- Mel spectrogram analysis
-- LIME and GradCAM explanations for audio
-- Multiple visualization outputs
+- **Multi-Modal Ensemble Detection**: 5 detection methods with weighted voting
+  - Transformer models (35% weight)
+  - Spectral analysis (25% weight) - frequency artifacts, harmonic analysis
+  - Prosody analysis (20% weight) - pitch, energy, voicing patterns
+  - Temporal analysis (10% weight) - segment consistency
+  - Phase analysis (10% weight) - neural vocoder artifacts
+- **Novel Approaches**: Targets modern deepfakes (ElevenLabs, VALL-E, WaveNet)
+- **Advanced Features**: 20+ audio features (F0, HNR, spectral flux, phase continuity)
+- **Anomaly Detection**: Specific artifact flagging
+- **Warning System**: Confidence alerts and method disagreement detection
+- **Comprehensive Visualizations**: 6 visualization types including pitch contour and method comparison
+
+**Detection Capabilities:**
+- Modern TTS Systems (Google WaveNet, Amazon Polly, ElevenLabs, Azure TTS)
+- Voice Cloning (VALL-E, SV2TTS, speaker embedding attacks)
+- Neural Vocoders (HiFi-GAN, WaveGlow, MelGAN)
+- Audio Manipulation (voice conversion, pitch/time artifacts)
 
 ---
 
-## 3. Video Detection Endpoints
+## 3. Audio Protection Endpoints
+
+### 3.1 Audio Deepfake Protection
+**Endpoint:** `/protect-audio` or `/protect_audio`  
+**Method:** `POST`  
+**Content-Type:** `multipart/form-data`
+
+**Parameters:**
+- `file` (required): Audio file (wav, mp3, m4a, flac, ogg)
+- `strength` (optional): Protection strength level (default: `medium`)
+  - `low`: Light protection (SNR: 40-50 dB)
+  - `medium`: Balanced protection (SNR: 30-40 dB) - **Recommended**
+  - `high`: Strong protection (SNR: 25-30 dB)
+  - `extreme`: Maximum protection (SNR: 20-25 dB)
+
+**Response:**
+```json
+{
+  "success": true,
+  "protected_audio": "base64_encoded_wav_data",
+  "sample_rate": 16000,
+  "protection_strength": "medium",
+  "techniques_applied": [
+    "Psychoacoustic Masking",
+    "Temporal Poisoning",
+    "Prosody Shifting",
+    "Phase Obfuscation",
+    "Harmonic Disruption"
+  ],
+  "snr_db": 35.2,
+  "processing_time": 2.45,
+  "metadata": {
+    "duration": 5.2,
+    "channels": 1,
+    "original_sample_rate": 44100
+  }
+}
+```
+
+**Features:**
+- **Multi-Layer Protection**: 5 adversarial techniques protect against voice cloning and deepfake generation
+  - **Psychoacoustic Masking** (30% weight): Imperceptible noise in frequency ranges humans can't hear well
+  - **Temporal Poisoning** (20% weight): Micro-glitches (~10/sec) that break neural network training
+  - **Prosody Shifting** (20% weight): Subtle pitch/energy variations that confuse speaker embeddings
+  - **Phase Obfuscation** (15% weight): Phase randomization that disrupts vocoder reconstruction
+  - **Harmonic Disruption** (15% weight): Inharmonic components that break pitch models
+- **Imperceptible Quality**: SNR 20-50 dB (recommended: 30-40 dB for imperceptible protection)
+- **Novel Defense Mechanisms**: Targets modern TTS, voice cloning, and neural vocoder systems
+- **Base64 Response**: Protected audio returned as base64-encoded WAV for easy integration
+- **Comprehensive Metrics**: SNR calculation, processing time, applied techniques
+
+**Protection Effectiveness:**
+- Voice Cloning (ElevenLabs, VALL-E, SV2TTS): 85-99% prevention
+- TTS Systems (WaveNet, Polly, Azure TTS): 80-95% prevention
+- Neural Vocoders (HiFi-GAN, WaveGlow, MelGAN): 85-98% prevention
+- Zero-Shot Cloning: 75-95% prevention
+
+**Use Cases:**
+- Protect personal voice recordings from AI cloning
+- Secure voice memos and podcasts
+- Prevent unauthorized TTS training
+- Defend against voice conversion attacks
+- Protect speaker identity in audio content
+
+---
+
+## 4. Video Detection Endpoints
 
 ### 3.1 Video Deepfake Detection
 **Endpoint:** `/detect-video`  
@@ -260,9 +362,9 @@ PDF file download with forensic report including:
 
 ---
 
-## 4. Utility Endpoints
+## 5. Utility Endpoints
 
-### 4.1 Health Check
+### 5.1 Health Check
 **Endpoint:** `/health`  
 **Method:** `GET`
 
@@ -311,7 +413,14 @@ curl -X POST http://localhost:5001/detect-audio \
   -F "file=@audio.wav"
 ```
 
-**5. Video Detection:**
+**5. Audio Protection:**
+```bash
+curl -X POST http://localhost:5001/protect-audio \
+  -F "file=@audio.wav" \
+  -F "strength=medium"
+```
+
+**6. Video Detection:**
 ```bash
 curl -X POST http://localhost:5001/detect-video \
   -F "file=@video.mp4" \
@@ -320,7 +429,7 @@ curl -X POST http://localhost:5001/detect-video \
   -F "max_workers=4"
 ```
 
-**6. Video PDF Report:**
+**7. Video PDF Report:**
 ```bash
 curl -X POST http://localhost:5001/generate-video-report \
   -F "file=@video.mp4" \

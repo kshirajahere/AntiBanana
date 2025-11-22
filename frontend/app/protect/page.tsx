@@ -15,6 +15,7 @@ import {
   X,
   Loader2,
   Download,
+  Music,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -61,13 +62,12 @@ export default function ProtectPage() {
   };
 
   const handleFile = (selectedFile: File) => {
-    // Check if file is an image, audio, or video
+    // Check if file is an image or audio
     if (
       !selectedFile.type.startsWith("image/") &&
-      !selectedFile.type.startsWith("audio/") &&
-      !selectedFile.type.startsWith("video/")
+      !selectedFile.type.startsWith("audio/")
     ) {
-      setError("Please upload an image, audio, or video file");
+      setError("Please upload an image or audio file");
       return;
     }
 
@@ -82,7 +82,7 @@ export default function ProtectPage() {
       };
       reader.readAsDataURL(selectedFile);
     } else {
-      // For audio/video, just set a placeholder
+      // For audio, set a placeholder
       setPreview(null);
     }
   };
@@ -118,12 +118,11 @@ export default function ProtectPage() {
 
     try {
       if (file.type.startsWith("image/")) {
-        // Create FormData with the image file
+        // Image protection - use existing MMHI protection
         const formData = new FormData();
         formData.append("file", file);
         formData.append("strength", strength);
 
-        // Call the real MMHI protection API
         const response = await fetch("http://localhost:5000/protect_image", {
           method: "POST",
           body: formData,
@@ -143,17 +142,47 @@ export default function ProtectPage() {
           clearInterval(progressInterval);
           setProcessProgress(100);
 
-          // Short delay to show 100% progress
           setTimeout(() => {
             setIsProcessing(false);
           }, 500);
         } else {
           throw new Error("Protection failed: No protected image returned");
         }
+      } else if (file.type.startsWith("audio/")) {
+        // Audio protection - NEW
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("strength", strength);
+
+        const response = await fetch("http://localhost:5000/protect_audio", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Audio protection failed");
+        }
+
+        const data = await response.json();
+
+        if (data.protected_audio) {
+          const audioData = data.protected_audio;
+          setProtectedImage(`data:audio/wav;base64,${audioData}`);
+          setResults(data);
+          clearInterval(progressInterval);
+          setProcessProgress(100);
+
+          setTimeout(() => {
+            setIsProcessing(false);
+          }, 500);
+        } else {
+          throw new Error("Protection failed: No protected audio returned");
+        }
       } else {
-        // Audio/Video protection not yet implemented
+        // Video protection not yet implemented
         clearInterval(progressInterval);
-        setError("Only image protection is currently supported");
+        setError("Only image and audio protection is currently supported");
         setIsProcessing(false);
       }
     } catch (err) {
@@ -170,7 +199,12 @@ export default function ProtectPage() {
 
     const link = document.createElement("a");
     link.href = protectedImage;
-    link.download = `protected_${file?.name || "image.png"}`;
+    
+    // Determine file extension based on file type
+    const isAudio = file?.type.startsWith("audio/");
+    const extension = isAudio ? "wav" : "png";
+    link.download = `protected_${file?.name.replace(/\.[^/.]+$/, '')}.${extension}`;
+    
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -242,7 +276,7 @@ export default function ProtectPage() {
                           id="file-upload"
                           ref={fileInputRef}
                           onChange={handleFileChange}
-                          accept="image/*"
+                          accept="image/*,audio/*"
                         />
                         <label
                           htmlFor="file-upload"
@@ -257,8 +291,8 @@ export default function ProtectPage() {
                               : "Drag and drop your file here"}
                           </h3>
                           <p className="text-sm text-muted-foreground mb-6 max-w-md">
-                            Upload your image to protect it against deepfake
-                            manipulation. Currently supports JPG, PNG, WEBP.
+                            Upload your image or audio to protect it against deepfake
+                            manipulation. Supports JPG, PNG, WEBP, WAV, MP3.
                           </p>
                           <Button
                             size="lg"
@@ -301,7 +335,11 @@ export default function ProtectPage() {
                           />
                         ) : (
                           <div className="w-full h-full bg-muted flex items-center justify-center">
-                            <FileImage className="w-16 h-16 text-muted-foreground" />
+                            {file?.type.startsWith("audio/") ? (
+                              <Music className="w-16 h-16 text-muted-foreground" />
+                            ) : (
+                              <FileImage className="w-16 h-16 text-muted-foreground" />
+                            )}
                           </div>
                         )}
                         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center p-6">
@@ -327,12 +365,20 @@ export default function ProtectPage() {
                             Protection Pipeline
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            Applying multi-stage adversarial perturbations:
+                            {file?.type.startsWith("audio/") 
+                              ? "Applying multi-layer audio protection:"
+                              : "Applying multi-stage adversarial perturbations:"}
                           </p>
                         </div>
 
                         <div className="space-y-3">
-                          {[
+                          {file?.type.startsWith("audio/") ? [
+                            { name: "Psychoacoustic Masking", progress: 20 },
+                            { name: "Temporal Poisoning", progress: 40 },
+                            { name: "Prosody Shifting", progress: 60 },
+                            { name: "Phase Obfuscation", progress: 80 },
+                            { name: "Harmonic Disruption", progress: 95 },
+                          ] : [
                             { name: "Semantic Decoupling", progress: 20 },
                             { name: "Attention Hijacking", progress: 40 },
                             { name: "Frequency Poisoning", progress: 60 },
@@ -389,20 +435,36 @@ export default function ProtectPage() {
                       </h2>
 
                       <p className="text-muted-foreground max-w-2xl mx-auto">
-                        Your image is now protected against AI manipulation. The
+                        Your {file?.type.startsWith("audio/") ? "audio" : "image"} is now protected against AI manipulation. The
                         invisible noise patterns will disrupt deepfake
-                        generation models.
+                        generation models{file?.type.startsWith("audio/") ? " and voice cloning systems" : ""}.
                       </p>
                     </div>
 
                     <div className="flex flex-col md:flex-row">
                       <div className="w-full md:w-1/2 p-6 border-r border-b">
                         <div className="aspect-square max-h-[400px] relative rounded-lg overflow-hidden border mb-4 shadow-inner">
-                          <img
-                            src={protectedImage || "/placeholder.svg"}
-                            alt="Protected media"
-                            className="w-full h-full object-contain bg-black/5"
-                          />
+                          {file?.type.startsWith("audio/") ? (
+                            <div className="w-full h-full bg-gradient-to-br from-primary/10 to-primary/5 flex flex-col items-center justify-center p-8">
+                              <Music className="w-24 h-24 text-primary mb-4" />
+                              <p className="text-lg font-medium mb-4">Protected Audio</p>
+                              <audio 
+                                controls 
+                                className="w-full max-w-md"
+                                src={protectedImage || ""}
+                              >
+                                Your browser does not support audio playback.
+                              </audio>
+                            </div>
+                          ) : (
+                            <>
+                              <img
+                                src={protectedImage || "/placeholder.svg"}
+                                alt="Protected media"
+                                className="w-full h-full object-contain bg-black/5"
+                              />
+                            </>
+                          )}
                           <div className="absolute top-2 right-2">
                             <Badge className="bg-green-500 hover:bg-green-600 text-white border-0">
                               PROTECTED
@@ -438,7 +500,17 @@ export default function ProtectPage() {
                               Applied Defenses
                             </h3>
                             <div className="flex flex-wrap gap-2">
-                              {results?.phases_applied?.map(
+                              {results?.techniques_applied?.map(
+                                (technique: string, i: number) => (
+                                  <Badge
+                                    key={i}
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    {technique}
+                                  </Badge>
+                                )
+                              ) || results?.phases_applied?.map(
                                 (phase: string, i: number) => (
                                   <Badge
                                     key={i}
@@ -449,17 +521,37 @@ export default function ProtectPage() {
                                   </Badge>
                                 )
                               ) || (
-                                <>
-                                  <Badge variant="secondary">
-                                    Semantic Decoupling
-                                  </Badge>
-                                  <Badge variant="secondary">
-                                    Attention Hijacking
-                                  </Badge>
-                                  <Badge variant="secondary">
-                                    Frequency Poisoning
-                                  </Badge>
-                                </>
+                                file?.type.startsWith("audio/") ? (
+                                  <>
+                                    <Badge variant="secondary">
+                                      Psychoacoustic Masking
+                                    </Badge>
+                                    <Badge variant="secondary">
+                                      Temporal Poisoning
+                                    </Badge>
+                                    <Badge variant="secondary">
+                                      Prosody Shifting
+                                    </Badge>
+                                    <Badge variant="secondary">
+                                      Phase Obfuscation
+                                    </Badge>
+                                    <Badge variant="secondary">
+                                      Harmonic Disruption
+                                    </Badge>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Badge variant="secondary">
+                                      Semantic Decoupling
+                                    </Badge>
+                                    <Badge variant="secondary">
+                                      Attention Hijacking
+                                    </Badge>
+                                    <Badge variant="secondary">
+                                      Frequency Poisoning
+                                    </Badge>
+                                  </>
+                                )
                               )}
                             </div>
                           </div>
@@ -484,6 +576,19 @@ export default function ProtectPage() {
                                 {strength}
                               </p>
                             </div>
+                            {results?.snr_db && (
+                              <div className="p-4 rounded-lg bg-muted/50 col-span-2">
+                                <h4 className="text-sm font-medium mb-1">
+                                  Signal-to-Noise Ratio
+                                </h4>
+                                <p className="text-2xl font-bold">
+                                  {results.snr_db.toFixed(1)} dB
+                                </p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Imperceptible to humans ({">"} 20 dB)
+                                </p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -499,8 +604,8 @@ export default function ProtectPage() {
                   <label className="text-sm font-medium mb-2 block">
                     Protection Strength
                   </label>
-                  <div className="grid grid-cols-3 gap-4">
-                    {["medium", "high", "extreme"].map((s) => (
+                  <div className="grid grid-cols-4 gap-4">
+                    {["low", "medium", "high", "extreme"].map((s) => (
                       <div
                         key={s}
                         onClick={() => setStrength(s)}
@@ -513,10 +618,12 @@ export default function ProtectPage() {
                       >
                         <div className="font-bold capitalize mb-1">{s}</div>
                         <div className="text-xs text-muted-foreground">
-                          {s === "medium"
+                          {s === "low"
+                            ? "Light"
+                            : s === "medium"
                             ? "Balanced"
                             : s === "high"
-                            ? "Stronger"
+                            ? "Strong"
                             : "Maximum"}
                         </div>
                       </div>
@@ -526,15 +633,17 @@ export default function ProtectPage() {
 
                 <div className="flex flex-col sm:flex-row w-full gap-4 items-center pt-4 border-t">
                   <div className="flex-1 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-md overflow-hidden border bg-muted">
+                    <div className="w-12 h-12 rounded-md overflow-hidden border bg-muted flex items-center justify-center">
                       {preview ? (
                         <img
                           src={preview || "/placeholder.svg"}
                           alt="Preview"
                           className="w-full h-full object-cover"
                         />
+                      ) : file?.type.startsWith("audio/") ? (
+                        <Music className="w-6 h-6 text-muted-foreground" />
                       ) : (
-                        <FileImage className="w-full h-full p-2 text-muted-foreground" />
+                        <FileImage className="w-6 h-6 text-muted-foreground" />
                       )}
                     </div>
                     <div>
@@ -558,7 +667,7 @@ export default function ProtectPage() {
                       onClick={protectFile}
                     >
                       <Shield className="w-4 h-4" />
-                      Protect Image
+                      {file?.type.startsWith("audio/") ? "Protect Audio" : "Protect Image"}
                     </Button>
                   </div>
                 </div>

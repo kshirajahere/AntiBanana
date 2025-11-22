@@ -15,13 +15,20 @@ except ImportError as e:
     print(f"Warning: SearchImage module not available: {e}")
     AGENTIC_AVAILABLE = False
 
-# Import audio detection module
+# Import audio detection module (new refactored version)
 try:
-    from VoiceAnalysis import analyze_audio
+    from AudioDeepfakeDetector import analyze_audio, AudioDeepfakeDetector
     AUDIO_DETECTION_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: VoiceAnalysis module not available: {e}")
+    print(f"Warning: AudioDeepfakeDetector module not available: {e}")
     AUDIO_DETECTION_AVAILABLE = False
+    # Fallback to old module if available
+    try:
+        from VoiceAnalysis import analyze_audio
+        AUDIO_DETECTION_AVAILABLE = True
+        print("Using legacy VoiceAnalysis module")
+    except ImportError:
+        pass
 
 # Import PDF report generation
 try:
@@ -38,6 +45,14 @@ try:
 except ImportError as e:
     print(f"Warning: VideoReport module not available: {e}")
     VIDEO_PDF_REPORT_AVAILABLE = False
+
+# Import audio protection module
+try:
+    from AudioProtection import protect_audio, AudioProtector
+    AUDIO_PROTECTION_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: AudioProtection module not available: {e}")
+    AUDIO_PROTECTION_AVAILABLE = False
 
 print(f"DeepfakeDetector loaded from: {sys.modules['DeepfakeDetector'].__file__}")
 
@@ -251,6 +266,77 @@ def protect_image():
             
         except Exception as e:
             print(f"❌ Protection failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+        finally:
+            # Clean up
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+@app.route('/protect-audio', methods=['POST'])
+@app.route('/protect_audio', methods=['POST'])
+def protect_audio_endpoint():
+    """
+    Audio protection endpoint - Protects audio against voice cloning and deepfake generation.
+    
+    Accepts:
+        - file: Audio file (wav, mp3, m4a, flac, ogg)
+        - strength: Protection strength (low/medium/high/extreme, default: medium)
+    
+    Returns:
+        Protected audio as base64 with metadata
+    """
+    if not AUDIO_PROTECTION_AVAILABLE:
+        return jsonify({'error': 'Audio protection module not available. Please install dependencies.'}), 503
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # Validate audio file extension
+    allowed_extensions = {'.wav', '.mp3', '.m4a', '.flac', '.ogg'}
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in allowed_extensions:
+        return jsonify({'error': f'Invalid audio format. Allowed: {allowed_extensions}'}), 400
+    
+    # Get protection strength parameter
+    strength = request.form.get('strength', 'medium')
+    if strength not in ['low', 'medium', 'high', 'extreme']:
+        strength = 'medium'
+    
+    if file:
+        # Save to temp file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_ext)
+        file.save(temp_file.name)
+        temp_path = temp_file.name
+        temp_file.close()
+        
+        try:
+            print(f"🛡️  Protecting audio with strength: {strength}")
+            
+            # Protect the audio
+            result = protect_audio(temp_path, strength=strength)
+            
+            if not result['success']:
+                return jsonify({'error': result.get('error', 'Protection failed')}), 500
+            
+            return jsonify({
+                'success': True,
+                'protected_audio': result['protected_audio_base64'],
+                'sample_rate': result['sample_rate'],
+                'protection_strength': result['protection_strength'],
+                'techniques_applied': result['techniques_applied'],
+                'snr_db': result['snr_db'],
+                'processing_time': result['processing_time'],
+                'metadata': result['metadata']
+            })
+            
+        except Exception as e:
+            print(f"❌ Audio protection failed: {e}")
             import traceback
             traceback.print_exc()
             return jsonify({'error': str(e)}), 500
