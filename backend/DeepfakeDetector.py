@@ -19,6 +19,9 @@ from ExplainabilityEngine import ExplainabilityEngine, create_model_wrapper_for_
 # Import C2PA Verifier for content provenance and authenticity
 from C2PAVerifier import C2PAVerifier
 
+# Import SynthID Detector for Google's invisible watermark detection
+from SynthIDDetector import SynthIDDetector
+
 class DeepfakeDetector:
     def __init__(self, enable_xai=False):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -83,6 +86,13 @@ class DeepfakeDetector:
         except Exception as e:
             print(f"❌ Failed to initialize C2PA Verifier: {e}")
             self.c2pa_verifier = None
+        
+        # 5. Initialize SynthID Detector for Google's invisible watermark detection
+        try:
+            self.synthid_detector = SynthIDDetector()
+        except Exception as e:
+            print(f"❌ Failed to initialize SynthID Detector: {e}")
+            self.synthid_detector = None
 
     def detect_faceswap(self, image):
         """Detects traditional face swapping deepfakes."""
@@ -428,6 +438,16 @@ class DeepfakeDetector:
             except Exception as e:
                 print(f"⚠️ C2PA verification failed: {e}")
                 c2pa_result = {"error": str(e)}
+        
+        # SynthID Detection (Google's invisible watermark)
+        synthid_result = None
+        if self.synthid_detector:
+            try:
+                synthid_result = self.synthid_detector.detect_synthid(image_path)
+                print(f"🔍 SynthID Detection: {synthid_result.get('has_synthid', False)}")
+            except Exception as e:
+                print(f"⚠️ SynthID detection failed: {e}")
+                synthid_result = {"error": str(e)}
 
         faceswap_res = self.detect_faceswap(image)
         
@@ -449,6 +469,13 @@ class DeepfakeDetector:
         texture_score = texture_res.get('score', 0)
         edge_score = edge_res.get('score', 0)
         
+        # Get SynthID score (if available)
+        synthid_score = 0.0
+        has_synthid = False
+        if synthid_result and not synthid_result.get('error'):
+            synthid_score = synthid_result.get('score', 0.0)
+            has_synthid = synthid_result.get('has_synthid', False)
+        
         # Get ELA details for more nuanced analysis
         ela_max_diff = ela_res.get('details', {}).get('max_difference', 0)
         ela_mean_diff = ela_res.get('details', {}).get('mean_difference', 0)
@@ -464,12 +491,14 @@ class DeepfakeDetector:
         # Weight configuration (based on model reliability)
         # Balanced weights to catch fakes while avoiding false positives
         # "Sweet Spot" Tuning: Slightly reduced AI weight to allow heuristics to contribute more
-        W_AI = 0.45      # Primary AI detection model weight
-        W_FS = 0.20      # Face swap detection weight
-        W_ELA = 0.15     # ELA weight (supporting evidence)
-        W_FREQ = 0.10    # Frequency analysis weight (supporting evidence)
-        W_TEXTURE = 0.06 # Texture inconsistency weight
-        W_EDGE = 0.04    # Edge inconsistency weight
+        # Adjusted weights to include SynthID detection
+        W_SYNTHID = 0.25 # SynthID weight - strong indicator when present
+        W_AI = 0.35      # Primary AI detection model weight (reduced from 0.45)
+        W_FS = 0.15      # Face swap detection weight (reduced from 0.20)
+        W_ELA = 0.10     # ELA weight (supporting evidence, reduced from 0.15)
+        W_FREQ = 0.08    # Frequency analysis weight (supporting evidence, reduced from 0.10)
+        W_TEXTURE = 0.05 # Texture inconsistency weight (reduced from 0.06)
+        W_EDGE = 0.02    # Edge inconsistency weight (reduced from 0.04)
         
         # === Confidence Calibration ===
         # Many models are overconfident. We apply sigmoid calibration to adjust scores.
@@ -497,6 +526,9 @@ class DeepfakeDetector:
         ai_score_calibrated = calibrate_score(ai_score, temperature=1.3, shift=0.05)
         fs_score_calibrated = calibrate_score(fs_score, temperature=1.3, shift=0.05)
         
+        # SynthID score calibration - if watermark detected, high confidence
+        synthid_score_calibrated = synthid_score if has_synthid else synthid_score * 0.5
+        
         # ELA and Frequency - calibrated thresholds
         # Lowered thresholds to catch subtle edits
         ela_score_calibrated = ela_score if ela_max_diff > 20 else ela_score * 0.7
@@ -508,6 +540,7 @@ class DeepfakeDetector:
         
         # === Weighted Ensemble ===
         ensemble_score = (
+            W_SYNTHID * synthid_score_calibrated +
             W_AI * ai_score_calibrated +
             W_FS * fs_score_calibrated +
             W_ELA * ela_score_calibrated +
@@ -541,6 +574,11 @@ class DeepfakeDetector:
         # Detect signals with balanced thresholds
         signal_count = 0
         strong_signals = []
+        
+        # SynthID detection - strong indicator
+        if has_synthid and synthid_score_calibrated > 0.5:
+            signal_count += 1
+            strong_signals.append("SynthID")
         
         # Lowered signal thresholds to be more sensitive
         if ai_score_calibrated > 0.35:
@@ -628,7 +666,11 @@ class DeepfakeDetector:
         # Determine the type of fake
         fake_type = "Unknown"
         if verdict == "Fake":
-            if fs_score_calibrated > ai_score_calibrated:
+            if has_synthid and synthid_score_calibrated > 0.5:
+                # SynthID detected - Google AI generation
+                generation_method = synthid_result.get('details', {}).get('generation_method', 'Google AI')
+                fake_type = f"AI Generated ({generation_method})"
+            elif fs_score_calibrated > ai_score_calibrated:
                 fake_type = "Face Swap / Deepfake"
             elif ela_score_calibrated > 0.6 and ai_score_calibrated < 0.5:
                 fake_type = "Digital Manipulation / Editing"
@@ -640,7 +682,16 @@ class DeepfakeDetector:
             "confidence": final_score,
             "confidence_level": confidence_level,
             "fake_type": fake_type,
+            # Add 'deepfake' for frontend backwards compatibility
+            "deepfake": [{
+                "label": "Fake" if verdict == "Fake" else "Real",
+                "score": final_score if verdict == "Fake" else (1 - final_score)
+            }, {
+                "label": "Real" if verdict == "Fake" else "Fake", 
+                "score": (1 - final_score) if verdict == "Fake" else final_score
+            }],
             "breakdown": {
+                "synthid_detection": synthid_result if synthid_result else {"score": 0.0, "has_synthid": False},
                 "faceswap_score": fs_score,
                 "ai_generation_score": ai_score,
                 "frequency_analysis": freq_res,
@@ -650,6 +701,7 @@ class DeepfakeDetector:
                 "patch_variance": patch_variance
             },
             "calibrated_scores": {
+                "synthid_calibrated": synthid_score_calibrated,
                 "ai_calibrated": ai_score_calibrated,
                 "faceswap_calibrated": fs_score_calibrated,
                 "ela_calibrated": ela_score_calibrated,
@@ -676,6 +728,18 @@ class DeepfakeDetector:
                 "manifest": c2pa_result.get("manifest_data", {}),
                 "signature": c2pa_result.get("signature_info", {}),
                 "assertions": c2pa_result.get("assertions", [])
+            }
+        
+        # Add SynthID detection data if available
+        if synthid_result and not synthid_result.get('error'):
+            result["synthid_detection"] = {
+                "has_watermark": has_synthid,
+                "confidence": synthid_result.get('confidence', 0.0),
+                "watermark_strength": synthid_result.get('details', {}).get('watermark_strength', 0.0),
+                "generation_method": synthid_result.get('details', {}).get('generation_method', 'unknown'),
+                "frequency_score": synthid_result.get('details', {}).get('frequency_score', 0.0),
+                "spatial_score": synthid_result.get('details', {}).get('spatial_score', 0.0),
+                "color_score": synthid_result.get('details', {}).get('color_score', 0.0)
             }
         
         return result

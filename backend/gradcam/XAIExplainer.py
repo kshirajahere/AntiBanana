@@ -43,7 +43,8 @@ class XAIExplainer:
             self.model_path = os.path.join(current_dir, 'deepfake_best_model.pth')
         
         # Image preprocessing transforms
-        self.rs_size = 224
+        # Match the training configuration: 64x64 image size
+        self.rs_size = 64
         self.interpolation = 3
         
         self.inference_transforms = v2.Compose([
@@ -84,22 +85,44 @@ class XAIExplainer:
                 )
             else:
                 # Load as pure PyTorch model
-                # We need to create a model architecture and load weights
-                from model.frame import FrameModel
+                # The Kaggle model uses rexnet_150 architecture
                 import timm
                 
                 # Try to infer architecture from the checkpoint
                 checkpoint = torch.load(self.model_path, map_location=self.device)
+                
+                # Inspect checkpoint keys to determine architecture
+                # RexNet has keys like: stem.conv.weight, features.X.conv_exp, etc.
+                # ResNet has keys like: conv1.weight, layer1.0.conv1, etc.
+                if isinstance(checkpoint, dict):
+                    sample_keys = list(checkpoint.keys())[:5]
+                else:
+                    sample_keys = []
+                
+                # Determine architecture from keys
+                if any('stem.conv' in k or 'features.' in k for k in sample_keys):
+                    # RexNet architecture
+                    model_name = 'rexnet_150'
+                    print(f"✓ Detected RexNet architecture from checkpoint keys")
+                elif any('model.conv1' in k or 'model.layer1' in k for k in sample_keys):
+                    # ResNet wrapped in FrameModel
+                    model_name = 'resnet50'
+                    print(f"✓ Detected ResNet architecture from checkpoint keys")
+                else:
+                    # Default to rexnet_150 (Kaggle training default)
+                    model_name = 'rexnet_150'
+                    print(f"⚠️ Could not determine architecture, defaulting to {model_name}")
                 
                 # If it's a full Lightning checkpoint
                 if 'state_dict' in checkpoint:
                     # Extract model architecture info from hyperparameters if available
                     if 'hyper_parameters' in checkpoint:
                         hparams = checkpoint['hyper_parameters']
-                        model_name = hparams.get('model_name', 'resnet50')
+                        model_name = hparams.get('model_name', model_name)
                         num_classes = hparams.get('num_classes', 2)
                         
-                        # Create the model
+                        # Create the FrameModel wrapper
+                        from model.frame import FrameModel
                         self.model = FrameModel(
                             model_name=model_name,
                             num_classes=num_classes,
@@ -107,19 +130,21 @@ class XAIExplainer:
                         )
                         self.model.load_state_dict(checkpoint['state_dict'])
                     else:
-                        # Fallback: create default model
+                        # Fallback: create model with detected architecture
+                        from model.frame import FrameModel
                         self.model = FrameModel(
-                            model_name='resnet50',
+                            model_name=model_name,
                             num_classes=2,
                             task='binary'
                         )
                         self.model.load_state_dict(checkpoint['state_dict'])
                 else:
-                    # Pure state dict - create default model
-                    self.model = FrameModel(
-                        model_name='resnet50',
-                        num_classes=2,
-                        task='binary'
+                    # Pure state dict - load directly into timm model (no FrameModel wrapper)
+                    print(f"✓ Loading pure state dict into {model_name}")
+                    self.model = timm.create_model(
+                        model_name,
+                        pretrained=False,
+                        num_classes=2
                     )
                     self.model.load_state_dict(checkpoint)
             
@@ -299,7 +324,7 @@ class XAIExplainer:
                         saliency = saliency.cpu().numpy()
                     
                     # Generate visualization
-                    original_np = np.array(original_image.resize((224, 224)))
+                    original_np = np.array(original_image.resize((self.rs_size, self.rs_size)))
                     visualization = self.generate_saliency_visualization(original_np, saliency)
                     
                     # Store results
