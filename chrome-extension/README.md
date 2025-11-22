@@ -1,25 +1,28 @@
 # 🍌 AntiBanana Chrome Extension
 
-A powerful browser extension for detecting deepfakes, protecting images, verifying C2PA provenance, and generating AI explainability visualizations.
+A powerful browser extension for detecting deepfakes, protecting images, verifying C2PA provenance, and generating AI explainability visualizations. **Now with WhatsApp Web integration!**
 
 ## 📁 Project Structure
 
 ```
 chrome-extension/
-├── manifest.json           # Extension configuration
-├── popup.html             # Main popup interface
-├── INSTALLATION.md        # Detailed installation guide
-├── README.md             # This file
+├── manifest.json              # Extension configuration
+├── popup.html                # Main popup interface
+├── INSTALLATION.md           # Detailed installation guide
+├── WHATSAPP_INTEGRATION.md   # WhatsApp Web guide
+├── README.md                 # This file
 ├── css/
-│   └── styles.css        # UI styling with modern gradients
+│   ├── styles.css           # UI styling with modern gradients
+│   └── whatsapp.css         # WhatsApp Web integration styles
 ├── js/
-│   ├── popup.js          # Main popup logic
-│   └── background.js     # Background service worker
+│   ├── popup.js             # Main popup logic
+│   ├── content.js           # WhatsApp Web content script
+│   └── background.js        # Background service worker
 └── icons/
-    ├── icon16.png        # 16x16 toolbar icon
-    ├── icon48.png        # 48x48 extension management icon
-    ├── icon128.png       # 128x128 Chrome Web Store icon
-    └── generate_icons.py # Icon generator script
+    ├── icon16.png           # 16x16 toolbar icon
+    ├── icon48.png           # 48x48 extension management icon
+    ├── icon128.png          # 128x128 Chrome Web Store icon
+    └── generate_icons.py    # Icon generator script
 ```
 
 ## ✨ Features
@@ -29,12 +32,14 @@ chrome-extension/
 - Real-time confidence scoring
 - Optional C2PA verification
 - XAI explanations with visual heatmaps
+- **NEW: Detect images directly in WhatsApp Web chats!**
 
 ### 🛡️ Image Protection (MMHI)
 - Protect images against deepfake generation
 - Three strength levels: Medium, High, Extreme
 - Download protected images instantly
 - Multiple protection phases applied
+- **NEW: Protect images before sending in WhatsApp Web!**
 
 ### 📜 C2PA Provenance Verification
 - Verify content credentials and chain of custody
@@ -46,6 +51,13 @@ chrome-extension/
 - Multiple explanation methods
 - Quick mode for faster processing
 - Visual heatmaps showing decision factors
+
+### 💬 WhatsApp Web Integration
+- **Detect Button**: Click "🍌 Detect" on any received image
+- **Protect Toggle**: Enable protection before sending images
+- **Real-time Results**: Instant popup with detection results
+- **Dark Mode**: Full support for WhatsApp's dark theme
+- 📖 **[Full WhatsApp Guide](WHATSAPP_INTEGRATION.md)**
 
 ## 🚀 Quick Start
 
