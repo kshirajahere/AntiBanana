@@ -42,6 +42,7 @@ import {
   FileImage,
   Gauge,
   FileWarning,
+  Music,
 } from "lucide-react";
 
 export default function DetectPage() {
@@ -87,10 +88,11 @@ export default function DetectPage() {
     // Check if file is an image or video
     if (
       !selectedFile.type.startsWith("image/") &&
-      !selectedFile.type.startsWith("video/")
+      !selectedFile.type.startsWith("video/") &&
+      !selectedFile.type.startsWith("audio/")
     ) {
       setError(
-        "Please upload an image or video file (JPG, PNG, WEBP, MP4, AVI, MOV)"
+        "Please upload an image, video, or audio file (JPG, PNG, WEBP, MP4, AVI, MOV, WAV, MP3)"
       );
       return;
     }
@@ -99,11 +101,15 @@ export default function DetectPage() {
     setError(null);
 
     // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(selectedFile);
+    if (selectedFile.type.startsWith("image/") || selectedFile.type.startsWith("video/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(selectedFile);
+    } else {
+      setPreview(null);
+    }
   };
 
   const analyzeMedia = async () => {
@@ -141,10 +147,12 @@ export default function DetectPage() {
       }
 
       // Determine endpoint based on file type
-      // Using detect-video for video files and detect for images
-      const endpoint = file.type.startsWith("video/")
-        ? "http://localhost:5000/detect-video"
-        : "http://localhost:5000/detect";
+      let endpoint = "http://localhost:5000/detect";
+      if (file.type.startsWith("video/")) {
+        endpoint = "http://localhost:5000/detect-video";
+      } else if (file.type.startsWith("audio/")) {
+        endpoint = "http://localhost:5000/detect-audio";
+      }
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -180,6 +188,14 @@ export default function DetectPage() {
             return;
           }
         }
+
+        // For audio results
+        if (file.type.startsWith("audio/")) {
+          setResults(data);
+          setIsAnalyzing(false);
+          return;
+        }
+
         // For both image and video results
         if (file.type.startsWith("video/")) {
           setResults({
@@ -254,6 +270,12 @@ export default function DetectPage() {
     return "unknown";
   };
 
+  // Determine if the audio is fake or real based on results
+  const getAudioResultStatus = () => {
+    if (!results) return null;
+    return results.prediction || "unknown";
+  };
+
   // Extract confidence score from results
   const getConfidenceScore = () => {
     if (!results || !results.deepfake) return null;
@@ -278,8 +300,13 @@ export default function DetectPage() {
     return null;
   };
 
-  const resultStatus = getResultStatus();
-  const confidenceScore = getConfidenceScore();
+  const getAudioConfidenceScore = () => {
+    if (!results || results.confidence === undefined) return null;
+    return results.confidence * 100;
+  };
+
+  const resultStatus = file?.type.startsWith("audio/") ? getAudioResultStatus() : getResultStatus();
+  const confidenceScore = file?.type.startsWith("audio/") ? getAudioConfidenceScore() : getConfidenceScore();
 
   const VideoResultsDisplay = () => {
     if (!results || !results.video_analysis) return null;
@@ -712,6 +739,140 @@ export default function DetectPage() {
     );
   };
 
+  const AudioResultsDisplay = () => {
+    if (!results) return null;
+
+    const isFake = results.prediction === "fake";
+    const confidence = results.confidence * 100;
+
+    return (
+      <div className="space-y-8">
+        <div className="grid md:grid-cols-2 gap-8">
+          <div className="space-y-6">
+            <div className="relative aspect-video rounded-lg overflow-hidden border bg-muted flex items-center justify-center p-8">
+              <div className="text-center space-y-4 w-full">
+                <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                  <Music className="w-10 h-10 text-primary" />
+                </div>
+                <p className="font-medium text-lg truncate">{file?.name}</p>
+                <audio controls className="w-full" src={preview || undefined}>
+                  Your browser does not support the audio element.
+                </audio>
+              </div>
+
+              <div className="absolute top-4 right-4">
+                <Badge
+                  variant={isFake ? "destructive" : "default"}
+                  className="text-lg px-4 py-1"
+                >
+                  {isFake ? "FAKE" : "REAL"}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <Card>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                  <Gauge className="w-8 h-8 mb-2 text-primary" />
+                  <div className="text-2xl font-bold">
+                    {confidence.toFixed(1)}%
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Confidence Score
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                  <Shield className="w-8 h-8 mb-2 text-primary" />
+                  <div className="text-2xl font-bold">Multi-Modal</div>
+                  <p className="text-xs text-muted-foreground">
+                    Analysis Method
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">Audio Analysis Results</h2>
+              <p className="text-muted-foreground">
+                {isFake
+                  ? "Our multi-modal audio analysis has detected significant artifacts indicating this audio is likely AI-generated or cloned."
+                  : "Our analysis indicates this audio is likely authentic. No significant manipulation artifacts were detected."}
+              </p>
+            </div>
+
+            <Tabs defaultValue="scores">
+              <TabsList className="w-full">
+                <TabsTrigger value="scores" className="flex-1">Method Scores</TabsTrigger>
+                <TabsTrigger value="visualizations" className="flex-1">Visualizations</TabsTrigger>
+                <TabsTrigger value="anomalies" className="flex-1">Anomalies</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="scores" className="space-y-4 mt-4">
+                <div className="space-y-4">
+                  {results.method_scores && Object.entries(results.method_scores).map(([method, score]: [string, any]) => (
+                    <div key={method} className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="font-medium capitalize">{method} Detection</span>
+                        <span>{(score * 100).toFixed(1)}% Fake Prob</span>
+                      </div>
+                      <Progress value={score * 100} className={cn("h-2", score > 0.5 ? "bg-destructive/20" : "bg-green-500/20")} />
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="visualizations" className="mt-4">
+                <div className="grid grid-cols-1 gap-4">
+                  {results.images && Object.entries(results.images).map(([name, data]: [string, any]) => (
+                    <div key={name} className="space-y-2">
+                      <h4 className="font-medium capitalize">{name.replace(/_/g, ' ')}</h4>
+                      <div className="rounded-lg overflow-hidden border bg-muted">
+                        <img
+                          src={`data:image/png;base64,${data}`}
+                          alt={name}
+                          className="w-full h-auto"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="anomalies" className="mt-4">
+                {results.anomalies && results.anomalies.length > 0 ? (
+                  <div className="space-y-2">
+                    {results.anomalies.map((anomaly: string, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 p-3 bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
+                        <AlertTriangle className="w-4 h-4" />
+                        <span className="text-sm">{anomaly}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center p-8 text-center space-y-4 border-2 border-dashed rounded-lg">
+                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 text-green-500" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium">No Anomalies Detected</h4>
+                      <p className="text-sm text-muted-foreground">
+                        The audio appears consistent with natural speech patterns.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
@@ -752,15 +913,15 @@ export default function DetectPage() {
                   </div>
                   <h3 className="text-2xl font-semibold mb-2">Upload Media</h3>
                   <p className="text-muted-foreground mb-6 text-center max-w-md">
-                    Drag and drop your image or video here, or click to browse.
-                    Supports JPG, PNG, MP4, AVI.
+                    Drag and drop your image, video, or audio here, or click to browse.
+                    Supports JPG, PNG, MP4, AVI, WAV, MP3.
                   </p>
                   <Button>Select File</Button>
                   <input
                     type="file"
                     ref={fileInputRef}
                     className="hidden"
-                    accept="image/*,video/*"
+                    accept="image/*,video/*,audio/*"
                     onChange={handleFileChange}
                   />
                 </div>
@@ -779,8 +940,10 @@ export default function DetectPage() {
                           ) : (
                             <FileImage className="w-8 h-8 text-muted-foreground" />
                           )
-                        ) : (
+                        ) : file.type.startsWith("video/") ? (
                           <FileText className="w-8 h-8 text-muted-foreground" />
+                        ) : (
+                          <Music className="w-8 h-8 text-muted-foreground" />
                         )}
                       </div>
                       <div>
@@ -834,6 +997,8 @@ export default function DetectPage() {
                     <div className="space-y-8">
                       {file.type.startsWith("video/") ? (
                         <VideoResultsDisplay />
+                      ) : file.type.startsWith("audio/") ? (
+                        <AudioResultsDisplay />
                       ) : (
                         <div className="grid md:grid-cols-2 gap-8">
                           <div className="space-y-6">
