@@ -18,3 +18,6 @@ c2pa-python
 python-dateutil
 cryptography
 requests
+timm
+pytorch-lightning
+torchmetrics

@@ -104,11 +104,17 @@ export default function DetectPage() {
     try {
       const formData = new FormData()
       formData.append("file", file)
+      
+      // Enable XAI explanations for images
+      if (file.type.startsWith("image/")) {
+        formData.append("enable_xai", "true")
+        formData.append("xai_methods", "GradCAM++")
+      }
 
       // Determine endpoint based on file type
       const endpoint = file.type.startsWith("video/")
         ? "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_video"
-        : "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_image"
+        : "http://localhost:5001/detect"
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -1139,6 +1145,70 @@ export default function DetectPage() {
                                       </div>
                                       <p className="text-xs text-muted-foreground mt-1">
                                         GradCAM++ highlights regions of potential manipulation
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {results?.xai_explanations && (
+                                <div className="space-y-4 mt-4">
+                                  <h4 className="text-sm font-medium">XAI Explanations</h4>
+
+                                  {results?.xai_explanations?.["GradCAM++"]?.overlay && (
+                                    <div>
+                                      <h5 className="text-xs font-medium mb-1 text-primary">GradCAM++ Heatmap</h5>
+                                      <div className="aspect-square max-h-[250px] rounded-lg overflow-hidden border">
+                                        <img
+                                          src={results?.xai_explanations?.["GradCAM++"]?.overlay}
+                                          alt="GradCAM++ heatmap"
+                                          className="w-full h-full object-cover"
+                                        />
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        Heatmap showing which regions influenced the deepfake prediction
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {results?.xai_explanations?.LIME?.overlay && (
+                                    <div>
+                                      <h5 className="text-xs font-medium mb-1 text-primary">LIME Explanation</h5>
+                                      <div className="aspect-square max-h-[250px] rounded-lg overflow-hidden border">
+                                        <img
+                                          src={results?.xai_explanations?.LIME?.overlay}
+                                          alt="LIME visualization"
+                                          className="w-full h-full object-cover"
+                                        />
+                                      </div>
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        LIME local interpretable explanation of the model's decision
+                                      </p>
+                                    </div>
+                                  )}
+
+                                  {results?.xai_explanations?.prediction && (
+                                    <div className="p-3 rounded-lg bg-muted">
+                                      <h5 className="text-xs font-medium mb-2">XAI Model Prediction</h5>
+                                      <div className="space-y-1">
+                                        <div className="flex justify-between text-xs">
+                                          <span>Label:</span>
+                                          <span className="font-medium">{results.xai_explanations.prediction.label_name}</span>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                          <span>Confidence:</span>
+                                          <span className="font-medium">
+                                            {(results.xai_explanations.prediction.confidence * 100).toFixed(2)}%
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {results?.xai_explanations?.error && (
+                                    <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                                        XAI explanation generation failed: {results.xai_explanations.error}
                                       </p>
                                     </div>
                                   )}

@@ -20,9 +20,13 @@ from ExplainabilityEngine import ExplainabilityEngine, create_model_wrapper_for_
 from C2PAVerifier import C2PAVerifier
 
 class DeepfakeDetector:
-    def __init__(self):
+    def __init__(self, enable_xai=False):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Loading DeepfakeDetector on {self.device}...")
+        
+        # XAI Explainer (lazy loaded)
+        self.enable_xai = enable_xai
+        self.xai_explainer = None
         
         # 1. Face Swap Detection Model (Existing ViT)
         # Good for DeepFaceLab, FaceSwap, etc.
@@ -851,6 +855,80 @@ class DeepfakeDetector:
                 "error": str(e),
                 "has_c2pa": False
             }
+
+    
+    def get_xai_explanation(self, image_path, methods=None):
+        """
+        Generate XAI explanations for an image using GradCAM++ and other methods.
+        
+        Args:
+            image_path (str): Path to the image file
+            methods (list): List of XAI methods to use (default: ['GradCAM++'])
+                           Options: 'GradCAM++', 'LIME', 'RISE', 'SHAP', 'SOBOL'
+        
+        Returns:
+            dict: Dictionary containing XAI visualizations and predictions
+        """
+        if not self.enable_xai:
+            return {
+                "error": "XAI is not enabled. Initialize DeepfakeDetector with enable_xai=True"
+            }
+        
+        try:
+            # Lazy load XAI explainer
+            if self.xai_explainer is None:
+                # Add gradcam to path
+                gradcam_path = os.path.join(os.path.dirname(__file__), 'gradcam')
+                if gradcam_path not in sys.path:
+                    sys.path.insert(0, gradcam_path)
+                
+                from gradcam.XAIExplainer import XAIExplainer
+                
+                # Path to the model
+                model_path = os.path.join(gradcam_path, 'deepfake_best_model.pth')
+                
+                self.xai_explainer = XAIExplainer(
+                    model_path=model_path,
+                    device=self.device
+                )
+                print("✅ XAI Explainer Loaded")
+            
+            # Generate explanations
+            if methods is None:
+                methods = ['GradCAM++']
+            
+            results = self.xai_explainer.explain(image_path, methods=methods)
+            return results
+            
+        except Exception as e:
+            print(f"XAI Explanation Error: {e}")
+            import traceback
+            return {
+                "error": str(e),
+                "traceback": traceback.format_exc()
+            }
+    
+    def detect_all_with_xai(self, image_path, xai_methods=None):
+        """
+        Run full deepfake detection with XAI explanations.
+        
+        Args:
+            image_path (str): Path to the image file
+            xai_methods (list): List of XAI methods to use (default: ['GradCAM++'])
+        
+        Returns:
+            dict: Combined results with detection and XAI explanations
+        """
+        # Get standard detection results
+        detection_results = self.detect_all(image_path)
+        
+        # Add XAI explanations if enabled
+        if self.enable_xai:
+            xai_results = self.get_xai_explanation(image_path, methods=xai_methods)
+            detection_results['xai_explanations'] = xai_results
+        
+        return detection_results
+
 
 # Singleton instance for easy import
 # detector = DeepfakeDetector()
