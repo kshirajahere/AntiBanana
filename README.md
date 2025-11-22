@@ -495,7 +495,7 @@ graph TB
     Model3 --> Score3[Confidence: 0.84<br/>Weight: 0.25]
     Freq --> Score4[Confidence: 0.78<br/>Weight: 0.15]
     
-    Score1 --> Fusion[Weighted Ensemble Fusion<br/>Final = Σ(Score × Weight)]
+    Score1 --> Fusion[Weighted Ensemble Fusion<br/>Final = Sum of Weighted Scores]
     Score2 --> Fusion
     Score3 --> Fusion
     Score4 --> Fusion
@@ -619,14 +619,14 @@ flowchart TD
     
     Phase1 --> DCT[DCT Transform<br/>Convert to Frequency]
     DCT --> Mask[High-Frequency Mask<br/>Target GAN Latent Space]
-    Mask --> Noise1[Inject Imperceptible Noise<br/>Îµ based on strength]
+    Mask --> Noise1[Inject Imperceptible Noise<br/>Epsilon based on strength]
     Noise1 --> IDCT[Inverse DCT<br/>Back to Spatial]
     
     IDCT --> Phase2[Phase 2: Color Space<br/>Manipulation]
     
-    Phase2 --> YUV[RGB → YUV Transform]
+    Phase2 --> YUV[RGB -> YUV Transform]
     YUV --> ChromaMod[Modify Chroma Channels<br/>U, V Components]
-    ChromaMod --> RGB[YUV → RGB Transform]
+    ChromaMod --> RGB[YUV -> RGB Transform]
     
     RGB --> Phase3[Phase 3: Adversarial<br/>Noise Injection]
     
@@ -634,7 +634,7 @@ flowchart TD
     PGD --> Iterate{Iterations<br/>Complete?}
     
     Iterate -->|No| Gradient[Compute Gradient<br/>w.r.t. Target Model]
-    Gradient --> Update[Update Image<br/>± α × sign(∇)]
+    Gradient --> Update[Update Image<br/>Add/Subtract Alpha Gradient]
     Update --> Clip[Clip to Epsilon Ball<br/>Maintain Perceptual Quality]
     Clip --> Iterate
     
@@ -642,7 +642,7 @@ flowchart TD
     
     Quality --> Verify{Meets<br/>Standards?}
     
-    Verify -->|No| Adjust[Adjust Strength<br/>Reduce Îµ]
+    Verify -->|No| Adjust[Adjust Strength<br/>Reduce Epsilon]
     Adjust --> Phase1
     
     Verify -->|Yes| Protected([Output: Protected Image<br/>Deepfake-Resistant])
@@ -1241,28 +1241,28 @@ sequenceDiagram
 ```mermaid
 gantt
     title Detection Pipeline Performance
-    dateFormat  s
-    axisFormat %S
+    dateFormat  HH:mm:ss
+    axisFormat  %S s
     
     section Single Image
-    File Upload & Validation    :0, 0.5s
-    Preprocessing                :0.5s, 0.5s
-    Model 1 Inference           :1s, 1.5s
-    Model 2 Inference           :1s, 1.5s
-    Model 3 Inference           :1s, 1.5s
-    Frequency Analysis          :1s, 1s
-    Ensemble Fusion             :2.5s, 0.5s
+    File Upload & Validation      :t1, 00:00:00, 0.5s
+    Preprocessing                 :t2, after t1, 0.5s
+    Model 1 Inference             :t3, after t2, 1.5s
+    Model 2 Inference             :t4, after t2, 1.5s
+    Model 3 Inference             :t5, after t2, 1.5s
+    Frequency Analysis            :t6, after t2, 1s
+    Ensemble Fusion               :t7, after t6, 0.5s
     
     section With XAI
-    LIME Generation             :3s, 3s
-    SHAP Calculation            :3s, 3s
-    Grad-CAM++ Processing       :3s, 2s
+    LIME Generation               :x1, 00:00:03, 3s
+    SHAP Calculation              :x2, 00:00:03, 3s
+    Grad-CAM++ Processing         :x3, 00:00:03, 2s
     
     section With Agentic
-    Vision Analysis             :8s, 5s
-    OCR Extraction              :8s, 3s
-    Web Search                  :8s, 4s
-    LLM Synthesis               :13s, 8s
+    Vision Analysis               :a1, 00:00:08, 5s
+    OCR Extraction                :a2, 00:00:08, 3s
+    Web Search                    :a3, 00:00:08, 4s
+    LLM Synthesis                 :a4, after a1, 8s
 ```
 
 ### Accuracy Comparison
