@@ -101,10 +101,56 @@ class C2PAVerifier:
             
         except Exception as e:
             print(f"❌ Error extracting C2PA manifest: {e}")
+            
+            # Fallback: Deep Scan for JUMBF signature
+            # This detects if C2PA data exists but is corrupted or unreadable
+            if self._scan_for_jumbf_signature(image_path):
+                print("⚠️ Deep Scan: JUMBF/C2PA signature detected despite parsing error")
+                return {
+                    "has_c2pa": True,
+                    "verified": False,
+                    "error": "C2PA data detected but unreadable (Corrupted or Unsupported Version)",
+                    "deep_scan_detected": True,
+                    "manifest_data": {
+                        "claim_generator": "Unknown (Detected via Deep Scan)",
+                        "title": "Unreadable Manifest",
+                        "format": "Unknown"
+                    }
+                }
+            
             return {
                 "has_c2pa": False,
                 "error": str(e)
             }
+
+    def _scan_for_jumbf_signature(self, file_path: str) -> bool:
+        """
+        Manually scan file for JUMBF (JPEG Universal Metadata Box Format) signature.
+        Useful when the parser fails but data might be present/corrupted.
+        """
+        try:
+            with open(file_path, 'rb') as f:
+                # Read chunks to find signature
+                # JUMBF signature is 'jumb' (0x6A756D62)
+                # Also check for 'c2pa' XMP namespace
+                
+                # Check header (first 2MB)
+                header = f.read(2 * 1024 * 1024)
+                if b'jumb' in header or b'c2pa' in header:
+                    return True
+                
+                # Check trailer (last 2MB)
+                f.seek(0, 2)
+                size = f.tell()
+                if size > 2 * 1024 * 1024:
+                    f.seek(max(0, size - 2 * 1024 * 1024))
+                    trailer = f.read()
+                    if b'jumb' in trailer or b'c2pa' in trailer:
+                        return True
+                    
+            return False
+        except Exception:
+            return False
     
     def verify_chain_of_custody(self, image_path: str) -> Dict[str, Any]:
         """
@@ -126,6 +172,23 @@ class C2PAVerifier:
             return self._fallback_provenance_analysis(image_path)
         
         try:
+            # Handle Deep Scan detection (partial/corrupted data)
+            if manifest_result.get("deep_scan_detected"):
+                return {
+                    "has_c2pa": True,
+                    "verified": False,
+                    "trust_level": "low",
+                    "claim_generator": "Unknown (Detected via Deep Scan)",
+                    "assertions": [],
+                    "signature_valid": False,
+                    "ingredients": [],
+                    "edit_history": [],
+                    "creation_info": {"created": "Unknown"},
+                    "warnings": ["C2PA data detected but unreadable/corrupted", "Signature verification failed"],
+                    "risk_score": 0.8,
+                    "deep_scan_detected": True
+                }
+
             active_data = manifest_result["manifest_data"]
             
             # Extract chain of custody information

@@ -1103,14 +1103,31 @@ export default function DetectPage() {
 
                               <TabsContent value="metadata" className="mt-4">
                                 <div className="space-y-4">
-                                  {results.c2pa_verification ? (
+                                  {results.c2pa_verification?.has_c2pa ? (
                                     <div className="space-y-4">
-                                      <div className="flex items-center gap-2 p-3 bg-green-500/10 text-green-600 rounded-lg">
-                                        <CheckCircle className="w-5 h-5" />
-                                        <span className="font-medium">
-                                          C2PA Signature Verified
-                                        </span>
-                                      </div>
+                                      {/* Status Banner */}
+                                      {results.c2pa_verification.deep_scan_detected ? (
+                                        <div className="flex items-center gap-2 p-3 bg-amber-500/10 text-amber-600 rounded-lg border border-amber-200 dark:border-amber-800">
+                                          <AlertTriangle className="w-5 h-5 flex-shrink-0" />
+                                          <div>
+                                            <span className="font-medium block">Hidden/Corrupted C2PA Detected</span>
+                                            <span className="text-xs opacity-90">Deep scan found traces of C2PA data, but it appears corrupted or stripped.</span>
+                                          </div>
+                                        </div>
+                                      ) : results.c2pa_verification.verified ? (
+                                        <div className="flex items-center gap-2 p-3 bg-green-500/10 text-green-600 rounded-lg border border-green-200 dark:border-green-800">
+                                          <CheckCircle className="w-5 h-5" />
+                                          <span className="font-medium">C2PA Signature Verified</span>
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2 p-3 bg-red-500/10 text-red-600 rounded-lg border border-red-200 dark:border-red-800">
+                                          <X className="w-5 h-5 flex-shrink-0" />
+                                          <div>
+                                            <span className="font-medium block">C2PA Verification Failed</span>
+                                            <span className="text-xs opacity-90">Signature invalid or chain of custody broken.</span>
+                                          </div>
+                                        </div>
+                                      )}
 
                                       <Accordion
                                         type="single"
