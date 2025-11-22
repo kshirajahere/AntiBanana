@@ -36,17 +36,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Optional: Add context menu items for quick access
 chrome.runtime.onInstalled.addListener(() => {
-    chrome.contextMenus.create({
-        id: 'antibanana-detect',
-        title: 'Detect with AntiBanana',
-        contexts: ['image']
-    });
+    if (chrome.contextMenus) {
+        chrome.contextMenus.create({
+            id: 'antibanana-detect',
+            title: 'Detect with AntiBanana',
+            contexts: ['image']
+        });
+    }
 });
 
 // Handle context menu clicks
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === 'antibanana-detect') {
-        // Could implement image detection from context menu
-        console.log('Context menu clicked on image:', info.srcUrl);
-    }
-});
+if (chrome.contextMenus) {
+    chrome.contextMenus.onClicked.addListener((info, tab) => {
+        if (info.menuItemId === 'antibanana-detect') {
+            // Could implement image detection from context menu
+            console.log('Context menu clicked on image:', info.srcUrl);
+        }
+    });
+}

@@ -47,23 +47,23 @@
                 <h2>Deepfake Detection</h2>
                 <div class="upload-area" id="detectUpload">
                     <div class="upload-icon">📁</div>
-                    <p>Click or drag image here</p>
-                    <input type="file" id="detectFile" accept="image/*" hidden>
+                    <p>Click or drag media here</p>
+                    <input type="file" id="detectFile" accept="image/*,video/*" hidden>
                 </div>
                 
                 <div class="options">
                     <label class="checkbox-label">
                         <input type="checkbox" id="detectC2PA" checked>
-                        <span>Include C2PA Verification</span>
+                        <span>Include C2PA Verification (images only)</span>
                     </label>
                     <label class="checkbox-label">
                         <input type="checkbox" id="detectXAI">
-                        <span>Enable XAI Explanations</span>
+                        <span>Enable XAI Explanations (images only)</span>
                     </label>
                 </div>
 
                 <button class="btn btn-primary" id="detectBtn" disabled>
-                    <span class="btn-text">Analyze Image</span>
+                    <span class="btn-text">Analyze Media</span>
                     <span class="spinner" hidden></span>
                 </button>
 
