@@ -3,14 +3,14 @@ torchvision
 transformers
 opencv-python
 scipy
-flask
+flask>=3.0.0
 flask-cors
+click>=8.1.0
 Pillow
 numpy
 lime
 shap
 grad-cam
-pytorch-grad-cam
 matplotlib
 scikit-image
 scikit-learn
