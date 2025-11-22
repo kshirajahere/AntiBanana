@@ -23,6 +23,32 @@ class SynthIDDetector:
         print("✅ SynthID Detector Initialized (Google Invisible Watermark Detection)")
         self.min_confidence_threshold = 0.25  # Lowered for better detection of AI-generated images
         
+    def check_metadata(self, image_path):
+        """
+        Check for metadata signatures indicating AI generation.
+        """
+        try:
+            with open(image_path, 'rb') as f:
+                content = f.read()
+                
+            # Common signatures for Google AI / SynthID
+            signatures = [
+                b"Made with Google AI",
+                b"trainedAlgorithmicMedia",
+                b"Google Imagen",
+                b"SynthID",
+                b"GDM-P", # Google DeepMind
+            ]
+            
+            for sig in signatures:
+                if sig in content:
+                    return True, sig.decode('utf-8', errors='ignore')
+            
+            return False, None
+        except Exception as e:
+            print(f"⚠️ Metadata check error: {e}")
+            return False, None
+
     def detect_synthid(self, image_path):
         """
         Detect SynthID watermark in an image.
@@ -47,8 +73,19 @@ class SynthIDDetector:
             # Load image
             image = Image.open(image_path).convert('RGB')
             
+            # Check metadata first (strong signal)
+            metadata_detected, metadata_sig = self.check_metadata(image_path)
+            
             # Perform SynthID detection
             result = self._analyze_synthid_pattern(image)
+            
+            # If metadata found, boost score
+            if metadata_detected:
+                result['has_synthid'] = True
+                result['score'] = max(result['score'], 0.95)
+                result['confidence'] = max(result['confidence'], 0.95)
+                result['details']['generation_method'] = f"Google AI Metadata ({metadata_sig})"
+                result['details']['metadata_detected'] = True
             
             return result
             

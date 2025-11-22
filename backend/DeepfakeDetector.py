@@ -649,6 +649,18 @@ class DeepfakeDetector:
         else:
             threshold = base_threshold  # More sensitive base threshold
         
+        # ============================================
+        # SYNTHID OVERRIDE: If SynthID detected with high confidence, force Fake verdict
+        # SynthID detection is DEFINITIVE proof of AI generation
+        # ============================================
+        if has_synthid and synthid_score > 0.5:  # If SynthID detected with reasonable confidence
+            print(f"🎯 SynthID OVERRIDE: Detected with {synthid_score:.2%} confidence - Forcing Fake verdict")
+            # Force the score high enough to trigger Fake verdict
+            final_score = max(final_score, 0.85)  # Ensure it's at least 85% fake
+            # If SynthID confidence is very high, push score even higher
+            if synthid_score > 0.8:
+                final_score = max(final_score, 0.95)
+        
         verdict = "Real"
         confidence_level = "Low"
         

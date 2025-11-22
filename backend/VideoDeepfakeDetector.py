@@ -31,6 +31,7 @@ from collections import defaultdict
 
 # Import detection modules
 from DeepfakeDetector import DeepfakeDetector
+import LipSyncWrapper
 
 
 class VideoFrameSampler:
@@ -500,6 +501,11 @@ class VideoDeepfakeDetector:
         aggregated_report['processing_time_seconds'] = processing_time
         aggregated_report['processing_time_formatted'] = f"{int(processing_time // 60)}:{int(processing_time % 60):02d}"
         
+        # Add Lip Sync Analysis
+        print("\n👄 Running Lip Sync Analysis...")
+        lip_sync_results = LipSyncWrapper.analyze_lip_sync(video_path)
+        aggregated_report['lip_sync_analysis'] = lip_sync_results
+        
         print("\n" + "="*80)
         print("✅ VIDEO ANALYSIS COMPLETE")
         print("="*80)
@@ -588,6 +594,10 @@ class VideoDeepfakeDetector:
                 "min_confidence": float(min_confidence),
                 "std_confidence": float(std_confidence)
             },
+            # Frontend compatibility fields
+            "fake_frames_detected": fake_count,
+            "total_frames_analyzed": total_valid,
+            "results": frame_results,
             "frame_results": frame_results,
             "c2pa_summary": c2pa_summary,
             "analysis_timestamp": datetime.now().isoformat()

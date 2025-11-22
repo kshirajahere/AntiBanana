@@ -181,7 +181,14 @@ export default function DetectPage() {
           }
         }
         // For both image and video results
-        setResults(data);
+        if (file.type.startsWith("video/")) {
+          setResults({
+            video_analysis: data,
+            lip_sync_analysis: data.lip_sync_analysis || null
+          });
+        } else {
+          setResults(data);
+        }
         setIsAnalyzing(false);
       }, 500);
     } catch (err) {
@@ -473,11 +480,9 @@ export default function DetectPage() {
                       Lip Sync Analysis
                     </h4>
                     <p className="text-xs text-muted-foreground">
-                      {typeof lip_sync_analysis === "object" &&
-                        lip_sync_analysis.error
+                      {lip_sync_analysis?.error
                         ? "Analysis failed"
-                        : typeof lip_sync_analysis === "object" &&
-                          lip_sync_analysis.fake_probability !== undefined
+                        : lip_sync_analysis?.fake_probability !== undefined
                           ? lip_sync_analysis.fake_probability > 0.5
                             ? "Potential mismatch detected"
                             : "No issues detected"
@@ -510,7 +515,7 @@ export default function DetectPage() {
                     <div className="col-span-3">Status</div>
                   </div>
                   <div className="max-h-60 overflow-y-auto">
-                    {video_analysis.results.map((frame: any, index: any) => (
+                    {(video_analysis.results || []).map((frame: any, index: any) => (
                       <div
                         key={index}
                         className={cn(
@@ -555,8 +560,7 @@ export default function DetectPage() {
                   </p>
                 </div>
 
-                {typeof lip_sync_analysis === "object" &&
-                  lip_sync_analysis.error ? (
+                {lip_sync_analysis?.error ? (
                   <div className="p-4 bg-muted rounded-lg">
                     <p className="text-sm">
                       {lip_sync_analysis.description || lip_sync_analysis.error}
@@ -570,7 +574,7 @@ export default function DetectPage() {
                           Real Probability
                         </h4>
                         <div className="flex items-center">
-                          {typeof lip_sync_analysis === "object" ? (
+                          {lip_sync_analysis && typeof lip_sync_analysis === "object" ? (
                             <>
                               <Progress
                                 value={lip_sync_analysis.real_probability * 100}
@@ -609,7 +613,7 @@ export default function DetectPage() {
                           Fake Probability
                         </h4>
                         <div className="flex items-center">
-                          {typeof lip_sync_analysis === "object" ? (
+                          {lip_sync_analysis && typeof lip_sync_analysis === "object" ? (
                             <>
                               <Progress
                                 value={lip_sync_analysis.fake_probability * 100}
@@ -649,7 +653,7 @@ export default function DetectPage() {
                         Analysis Result
                       </h4>
                       <p className="text-sm">
-                        {typeof lip_sync_analysis === "object"
+                        {lip_sync_analysis && typeof lip_sync_analysis === "object"
                           ? lip_sync_analysis.description ||
                           (lip_sync_analysis.fake_probability > 0.5
                             ? "Potential lip sync mismatch detected, suggesting possible manipulation."
@@ -662,17 +666,16 @@ export default function DetectPage() {
                       </p>
                     </div>
 
-                    {typeof lip_sync_analysis === "object" &&
-                      lip_sync_analysis.processing_time_seconds && (
-                        <div className="p-4 rounded-lg bg-muted">
-                          <h4 className="text-sm font-medium mb-1">
-                            Processing Time
-                          </h4>
-                          <p className="text-sm">
-                            {lip_sync_analysis.processing_time_seconds} seconds
-                          </p>
-                        </div>
-                      )}
+                    {lip_sync_analysis?.processing_time_seconds && (
+                      <div className="p-4 rounded-lg bg-muted">
+                        <h4 className="text-sm font-medium mb-1">
+                          Processing Time
+                        </h4>
+                        <p className="text-sm">
+                          {lip_sync_analysis.processing_time_seconds} seconds
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </TabsContent>
