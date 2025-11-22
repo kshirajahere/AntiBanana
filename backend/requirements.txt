@@ -21,3 +21,19 @@ requests
 timm
 pytorch-lightning
 torchmetrics
+
+# Agentic Analysis Dependencies
+langchain
+langchain-groq
+langchain-community
+langchain-core
+groq
+pytesseract
+tavily-python
+
+# PDF Report Generation
+reportlab
+
+# Audio Detection
+librosa
+soundfile
