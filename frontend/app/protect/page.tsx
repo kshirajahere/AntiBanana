@@ -23,6 +23,9 @@ export default function ProtectPage() {
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const [strength, setStrength] = useState<string>("medium")
+  const [results, setResults] = useState<any>(null)
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(true)
@@ -90,6 +93,7 @@ export default function ProtectPage() {
     setIsProcessing(true)
     setProcessProgress(0)
     setProtectedImage(null)
+    setResults(null)
     setError(null)
 
     // Simulate progress
@@ -99,17 +103,16 @@ export default function ProtectPage() {
           clearInterval(progressInterval)
           return prev
         }
-        return prev + Math.random() * 15
+        return prev + Math.random() * 5
       })
-    }, 300)
+    }, 500)
 
     try {
       if (file.type.startsWith("image/")) {
         // Create FormData with the image file
         const formData = new FormData()
         formData.append("file", file)
-        formData.append("strength", "medium") // You can make this configurable
-        formData.append("phases", "1,2,3,4") // All phases
+        formData.append("strength", strength)
 
         // Call the real MMHI protection API
         const response = await fetch("http://localhost:5000/protect_image", {
@@ -124,9 +127,10 @@ export default function ProtectPage() {
 
         const data = await response.json()
 
-        if (data.success && data.protected_image) {
+        if (data.protected_image) {
           const imageData = data.protected_image
           setProtectedImage(`data:image/png;base64,${imageData}`)
+          setResults(data)
           clearInterval(progressInterval)
           setProcessProgress(100)
 
@@ -137,15 +141,10 @@ export default function ProtectPage() {
         } else {
           throw new Error("Protection failed: No protected image returned")
         }
-      } else if (file.type.startsWith("audio/")) {
-        // Audio protection not yet implemented
+      } else {
+        // Audio/Video protection not yet implemented
         clearInterval(progressInterval)
-        setError("Audio protection is not yet implemented")
-        setIsProcessing(false)
-      } else if (file.type.startsWith("video/")) {
-        // Video protection not yet implemented
-        clearInterval(progressInterval)
-        setError("Video protection is not yet implemented")
+        setError("Only image protection is currently supported")
         setIsProcessing(false)
       }
     } catch (err) {
@@ -199,7 +198,7 @@ export default function ProtectPage() {
             </div>
           </div>
 
-          <Card className="mb-8 overflow-hidden border-2">
+          <Card className="mb-8 overflow-hidden border-2 bg-card/50 backdrop-blur-sm">
             <CardContent className="p-0">
               <AnimatePresence mode="wait">
                 {!file && !protectedImage ? (
@@ -213,33 +212,33 @@ export default function ProtectPage() {
                     <div
                       className={cn(
                         "p-10 transition-all duration-300",
-                        isDragging ? "bg-primary/10 border-primary" : "bg-card",
+                        isDragging ? "bg-primary/10 border-primary" : "bg-transparent",
                       )}
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
                     >
-                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center">
+                      <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-12 text-center hover:border-primary/50 transition-colors">
                         <input
                           type="file"
                           className="hidden"
                           id="file-upload"
                           ref={fileInputRef}
                           onChange={handleFileChange}
-                          accept="image/*,audio/*,video/*"
+                          accept="image/*"
                         />
                         <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
-                          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                          <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                             <Upload className="w-10 h-10 text-primary" />
                           </div>
                           <h3 className="text-xl font-medium mb-2">
                             {isDragging ? "Drop your file here" : "Drag and drop your file here"}
                           </h3>
                           <p className="text-sm text-muted-foreground mb-6 max-w-md">
-                            Upload your media to protect it against deepfake manipulation. We support images, audio, and
-                            video files.
+                            Upload your image to protect it against deepfake manipulation.
+                            Currently supports JPG, PNG, WEBP.
                           </p>
-                          <Button size="lg" className="gap-2">
+                          <Button size="lg" className="gap-2 shadow-lg hover:shadow-primary/25">
                             <FileImage className="w-4 h-4" />
                             Select File
                           </Button>
@@ -268,7 +267,7 @@ export default function ProtectPage() {
                     className="p-10"
                   >
                     <div className="flex flex-col md:flex-row gap-8 items-center">
-                      <div className="w-full md:w-1/2 aspect-square md:aspect-auto md:max-h-[400px] relative rounded-lg overflow-hidden border">
+                      <div className="w-full md:w-1/2 aspect-square md:aspect-auto md:max-h-[400px] relative rounded-lg overflow-hidden border shadow-2xl">
                         {preview ? (
                           <img
                             src={preview || "/placeholder.svg"}
@@ -282,15 +281,9 @@ export default function ProtectPage() {
                         )}
                         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center p-6">
                           <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-                          <h3 className="text-xl font-medium mb-2">Processing Media</h3>
+                          <h3 className="text-xl font-medium mb-2">Applying MMHI Protection</h3>
                           <p className="text-sm text-muted-foreground mb-4 text-center">
-                            Our AI is adding protection to your{" "}
-                            {file?.type.startsWith("image/")
-                              ? "image"
-                              : file?.type.startsWith("audio/")
-                                ? "audio"
-                                : "video"}
-                            . This may take a few moments.
+                            Injecting invisible protective noise patterns...
                           </p>
                           <div className="w-full max-w-md">
                             <Progress value={processProgress} className="h-2" />
@@ -303,109 +296,44 @@ export default function ProtectPage() {
 
                       <div className="w-full md:w-1/2 space-y-6">
                         <div className="space-y-2">
-                          <h3 className="text-xl font-medium">Protection Process</h3>
+                          <h3 className="text-xl font-medium">Protection Pipeline</h3>
                           <p className="text-sm text-muted-foreground">
-                            Our advanced AI model is adding protection to your media through multiple layers:
+                            Applying multi-stage adversarial perturbations:
                           </p>
                         </div>
 
                         <div className="space-y-3">
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                processProgress > 20
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {processProgress > 20 ? "✓" : "1"}
-                            </div>
-                            <div className="flex-1">
-                              <p
+                          {[
+                            { name: "Semantic Decoupling", progress: 20 },
+                            { name: "Attention Hijacking", progress: 40 },
+                            { name: "Frequency Poisoning", progress: 60 },
+                            { name: "Boundary Shifting", progress: 80 },
+                            { name: "Final Optimization", progress: 95 }
+                          ].map((step, idx) => (
+                            <div key={idx} className="flex items-center gap-3">
+                              <div
                                 className={cn(
-                                  "text-sm font-medium",
-                                  processProgress > 20 ? "text-primary" : "text-muted-foreground",
+                                  "w-6 h-6 rounded-full flex items-center justify-center text-xs transition-colors duration-500",
+                                  processProgress > step.progress
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-muted-foreground",
                                 )}
                               >
-                                Media Analysis
-                              </p>
+                                {processProgress > step.progress ? "✓" : idx + 1}
+                              </div>
+                              <div className="flex-1">
+                                <p
+                                  className={cn(
+                                    "text-sm font-medium transition-colors duration-500",
+                                    processProgress > step.progress ? "text-primary" : "text-muted-foreground",
+                                  )}
+                                >
+                                  {step.name}
+                                </p>
+                              </div>
                             </div>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                processProgress > 50
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {processProgress > 50 ? "✓" : "2"}
-                            </div>
-                            <div className="flex-1">
-                              <p
-                                className={cn(
-                                  "text-sm font-medium",
-                                  processProgress > 50 ? "text-primary" : "text-muted-foreground",
-                                )}
-                              >
-                                Randomizing Embeddings
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                processProgress > 80
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {processProgress > 80 ? "✓" : "3"}
-                            </div>
-                            <div className="flex-1">
-                              <p
-                                className={cn(
-                                  "text-sm font-medium",
-                                  processProgress > 80 ? "text-primary" : "text-muted-foreground",
-                                )}
-                              >
-                                Encryption
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-xs",
-                                processProgress >= 100
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground",
-                              )}
-                            >
-                              {processProgress >= 100 ? "✓" : "4"}
-                            </div>
-                            <div className="flex-1">
-                              <p
-                                className={cn(
-                                  "text-sm font-medium",
-                                  processProgress >= 100 ? "text-primary" : "text-muted-foreground",
-                                )}
-                              >
-                                Final Processing
-                              </p>
-                            </div>
-                          </div>
+                          ))}
                         </div>
-
-                        <Button variant="outline" className="w-full" onClick={resetProcess}>
-                          Cancel Process
-                        </Button>
                       </div>
                     </div>
                   </motion.div>
@@ -418,101 +346,76 @@ export default function ProtectPage() {
                     transition={{ duration: 0.3 }}
                     className="p-0"
                   >
-                    <div className="p-6 text-center bg-green-500/10">
-                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-background">
+                    <div className="p-6 text-center bg-green-500/10 border-b border-green-500/20">
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-background shadow-sm">
                         <CheckCircle className="w-8 h-8 text-green-500" />
                       </div>
 
                       <h2 className="text-3xl font-bold mb-2">Protection Complete</h2>
 
                       <p className="text-muted-foreground max-w-2xl mx-auto">
-                        Your media has been successfully protected against deepfake manipulation. You can now download
-                        the protected file.
+                        Your image is now protected against AI manipulation. The invisible noise patterns will disrupt deepfake generation models.
                       </p>
-
-                      <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-background">
-                        <span className="text-sm font-medium">Status:</span>
-                        <Badge variant="default">Protected</Badge>
-                      </div>
                     </div>
 
                     <div className="flex flex-col md:flex-row">
                       <div className="w-full md:w-1/2 p-6 border-r border-b">
-                        <div className="aspect-square max-h-[400px] relative rounded-lg overflow-hidden border mb-4">
-                          {protectedImage ? (
-                            <img
-                              src={protectedImage || "/placeholder.svg"}
-                              alt="Protected media"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-muted flex items-center justify-center">
-                              <FileImage className="w-16 h-16 text-muted-foreground" />
-                            </div>
-                          )}
-
+                        <div className="aspect-square max-h-[400px] relative rounded-lg overflow-hidden border mb-4 shadow-inner">
+                          <img
+                            src={protectedImage || "/placeholder.svg"}
+                            alt="Protected media"
+                            className="w-full h-full object-contain bg-black/5"
+                          />
                           <div className="absolute top-2 right-2">
-                            <Badge variant="default" className="text-xs px-2 py-1">
+                            <Badge className="bg-green-500 hover:bg-green-600 text-white border-0">
                               PROTECTED
                             </Badge>
                           </div>
                         </div>
 
-                        <div className="flex justify-between">
-                          <Button variant="outline" size="sm" onClick={resetProcess} className="gap-2">
-                            <X className="w-4 h-4" />
-                            New Protection
+                        <div className="flex justify-between gap-4">
+                          <Button variant="outline" onClick={resetProcess} className="flex-1">
+                            <X className="w-4 h-4 mr-2" />
+                            New
                           </Button>
 
-                          <Button variant="default" size="sm" onClick={downloadProtectedFile} className="gap-2">
-                            <Download className="w-4 h-4" />
-                            Download Protected File
+                          <Button variant="default" onClick={downloadProtectedFile} className="flex-1 bg-green-600 hover:bg-green-700">
+                            <Download className="w-4 h-4 mr-2" />
+                            Download
                           </Button>
                         </div>
                       </div>
 
                       <div className="w-full md:w-1/2 p-6">
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <h3 className="text-lg font-medium">Protection Summary</h3>
-                            <p className="text-sm text-muted-foreground">
-                              Your media has been protected with our advanced AI technology. This protection helps
-                              identify if your content is used to create deepfakes or manipulated in any way.
-                            </p>
+                        <div className="space-y-6">
+                          <div>
+                            <h3 className="text-lg font-medium mb-2">Applied Defenses</h3>
+                            <div className="flex flex-wrap gap-2">
+                              {results?.phases_applied?.map((phase: string, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-xs">
+                                  {phase}
+                                </Badge>
+                              )) || (
+                                  <>
+                                    <Badge variant="secondary">Semantic Decoupling</Badge>
+                                    <Badge variant="secondary">Attention Hijacking</Badge>
+                                    <Badge variant="secondary">Frequency Poisoning</Badge>
+                                  </>
+                                )}
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-4">
-                            <div className="p-4 rounded-lg bg-muted">
-                              <h4 className="text-sm font-medium mb-1">File Type</h4>
-                              <p className="text-xs text-muted-foreground">{file?.type || "Unknown"}</p>
-                            </div>
-
-                            <div className="p-4 rounded-lg bg-muted">
-                              <h4 className="text-sm font-medium mb-1">File Size</h4>
-                              <p className="text-xs text-muted-foreground">
-                                {file ? `${(file.size / (1024 * 1024)).toFixed(2)} MB` : "Unknown"}
+                            <div className="p-4 rounded-lg bg-muted/50">
+                              <h4 className="text-sm font-medium mb-1">Processing Time</h4>
+                              <p className="text-2xl font-bold">
+                                {results?.processing_time ? results.processing_time.toFixed(2) : "0.00"}s
                               </p>
                             </div>
-
-                            <div className="p-4 rounded-lg bg-muted">
-                              <h4 className="text-sm font-medium mb-1">Protection Status</h4>
-                              <p className="text-xs text-green-500">Protected</p>
+                            <div className="p-4 rounded-lg bg-muted/50">
+                              <h4 className="text-sm font-medium mb-1">Strength</h4>
+                              <p className="text-2xl font-bold capitalize">{strength}</p>
                             </div>
-
-                            <div className="p-4 rounded-lg bg-muted">
-                              <h4 className="text-sm font-medium mb-1">Protection Level</h4>
-                              <p className="text-xs text-muted-foreground">High</p>
-                            </div>
-                          </div>
-
-                          <div className="p-4 rounded-lg bg-muted">
-                            <h4 className="text-sm font-medium mb-2">What happens next?</h4>
-                            <ul className="text-xs text-muted-foreground space-y-1">
-                              <li>• Download your protected media file</li>
-                              <li>• Use it as you normally would</li>
-                              <li>• If someone tries to use it for deepfakes, our protection will help identify it</li>
-                              <li>• The protection is invisible to the human eye but detectable by our systems</li>
-                            </ul>
                           </div>
                         </div>
                       </div>
@@ -523,10 +426,33 @@ export default function ProtectPage() {
             </CardContent>
 
             {file && !protectedImage && !isProcessing && (
-              <CardFooter className="p-6 border-t bg-muted/50">
-                <div className="flex flex-col sm:flex-row w-full gap-4 items-center">
+              <CardFooter className="p-6 border-t bg-muted/30 flex flex-col gap-4">
+                <div className="w-full">
+                  <label className="text-sm font-medium mb-2 block">Protection Strength</label>
+                  <div className="grid grid-cols-3 gap-4">
+                    {['medium', 'high', 'extreme'].map((s) => (
+                      <div
+                        key={s}
+                        onClick={() => setStrength(s)}
+                        className={cn(
+                          "cursor-pointer rounded-lg border-2 p-4 text-center transition-all hover:bg-accent",
+                          strength === s
+                            ? "border-primary bg-primary/5"
+                            : "border-muted bg-card"
+                        )}
+                      >
+                        <div className="font-bold capitalize mb-1">{s}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {s === 'medium' ? 'Balanced' : s === 'high' ? 'Stronger' : 'Maximum'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row w-full gap-4 items-center pt-4 border-t">
                   <div className="flex-1 flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-md overflow-hidden border bg-muted">
+                    <div className="w-12 h-12 rounded-md overflow-hidden border bg-muted">
                       {preview ? (
                         <img src={preview || "/placeholder.svg"} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
@@ -542,26 +468,15 @@ export default function ProtectPage() {
                   </div>
 
                   <div className="flex gap-2 w-full sm:w-auto">
-                    <Button variant="outline" className="flex-1 sm:flex-initial" onClick={resetProcess}>
+                    <Button variant="ghost" onClick={resetProcess}>
                       Cancel
                     </Button>
-                    <Button className="flex-1 sm:flex-initial gap-2" onClick={protectFile}>
+                    <Button className="gap-2 min-w-[140px]" onClick={protectFile}>
                       <Shield className="w-4 h-4" />
-                      Protect Media
+                      Protect Image
                     </Button>
                   </div>
                 </div>
-
-                {error && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="mt-4 p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive flex items-center gap-2"
-                  >
-                    <AlertTriangle className="w-5 h-5" />
-                    <span>{error}</span>
-                  </motion.div>
-                )}
               </CardFooter>
             )}
           </Card>

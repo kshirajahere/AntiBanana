@@ -663,7 +663,7 @@ class DeepfakeDetector:
         
         # Add C2PA provenance data if available
         if c2pa_result:
-            result["c2pa_provenance"] = {
+            result["c2pa_verification"] = {
                 "has_c2pa": c2pa_result.get("has_c2pa", False),
                 "verified": c2pa_result.get("verified", False),
                 "trust_level": c2pa_result.get("trust_level", "unknown"),
@@ -671,7 +671,11 @@ class DeepfakeDetector:
                 "warnings": c2pa_result.get("warnings", []),
                 "claim_generator": c2pa_result.get("claim_generator", None),
                 "edit_history_count": len(c2pa_result.get("edit_history", [])),
-                "trust_adjustment": c2pa_trust_boost + c2pa_risk_penalty
+                "trust_adjustment": c2pa_trust_boost + c2pa_risk_penalty,
+                # Pass through full data for frontend viewer
+                "manifest": c2pa_result.get("manifest_data", {}),
+                "signature": c2pa_result.get("signature_info", {}),
+                "assertions": c2pa_result.get("assertions", [])
             }
         
         return result

@@ -156,6 +156,7 @@ def verify_c2pa():
                 os.remove(temp_path)
 
 @app.route('/protect', methods=['POST'])
+@app.route('/protect_image', methods=['POST'])
 def protect_image():
     """
     MMHI Protection endpoint - Protects images against deepfake generation.
@@ -222,5 +223,6 @@ if __name__ == '__main__':
     from multiprocessing import freeze_support
     freeze_support()
     
-    print("Starting Deepfake Detection Server on port 5001...")
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    print("Starting Deepfake Detection Server on port 5000...")
+    # Disable reloader to prevent restarts during file processing
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
