@@ -137,7 +137,7 @@ export default function DetectPage() {
 
       // Determine endpoint based on file type
       const endpoint = file.type.startsWith("video/")
-        ? "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_video"
+        ? "http://localhost:5000/detect-video"
         : "http://localhost:5000/detect";
 
       const response = await fetch(endpoint, {

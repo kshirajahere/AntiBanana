@@ -20,7 +20,11 @@ from ExplainabilityEngine import ExplainabilityEngine, create_model_wrapper_for_
 from C2PAVerifier import C2PAVerifier
 
 # Import SynthID Detector for Google's invisible watermark detection
-from SynthIDDetector import SynthIDDetector
+try:
+    from SynthIDDetector import SynthIDDetector
+except ImportError:
+    print("⚠️  SynthIDDetector not available (optional feature)")
+    SynthIDDetector = None
 
 class DeepfakeDetector:
     def __init__(self, enable_xai=False):
@@ -89,7 +93,10 @@ class DeepfakeDetector:
         
         # 5. Initialize SynthID Detector for Google's invisible watermark detection
         try:
-            self.synthid_detector = SynthIDDetector()
+            if SynthIDDetector is not None:
+                self.synthid_detector = SynthIDDetector()
+            else:
+                self.synthid_detector = None
         except Exception as e:
             print(f"❌ Failed to initialize SynthID Detector: {e}")
             self.synthid_detector = None
