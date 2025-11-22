@@ -5,11 +5,13 @@
   "description": "Detect deepfakes, verify C2PA provenance, protect images with MMHI, and generate XAI explanations",
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "downloads"
   ],
   "host_permissions": [
     "http://localhost:5000/*",
-    "http://127.0.0.1:5000/*"
+    "http://127.0.0.1:5000/*",
+    "https://web.whatsapp.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
@@ -26,5 +28,19 @@
   },
   "background": {
     "service_worker": "js/background.js"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://web.whatsapp.com/*"],
+      "js": ["js/content.js"],
+      "css": ["css/whatsapp.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*.png"],
+      "matches": ["https://web.whatsapp.com/*"]
+    }
+  ]
 }
