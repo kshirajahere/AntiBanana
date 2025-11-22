@@ -285,8 +285,8 @@ export default function DetectPage() {
             fakeFramesPercentage > 30
               ? "bg-destructive/10"
               : fakeFramesPercentage > 10
-              ? "bg-amber-500/10"
-              : "bg-green-500/10"
+                ? "bg-amber-500/10"
+                : "bg-green-500/10"
           )}
         >
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-background">
@@ -303,16 +303,16 @@ export default function DetectPage() {
             {fakeFramesPercentage > 30
               ? "Deepfake Detected"
               : fakeFramesPercentage > 10
-              ? "Possible Manipulation"
-              : "Likely Authentic"}
+                ? "Possible Manipulation"
+                : "Likely Authentic"}
           </h2>
 
           <p className="text-muted-foreground max-w-2xl mx-auto">
             {fakeFramesPercentage > 30
               ? "Our AI has detected significant signs of manipulation in this video."
               : fakeFramesPercentage > 10
-              ? "Our AI has detected some potential signs of manipulation in this video."
-              : "Our AI analysis indicates this is likely an authentic video without significant signs of deepfake manipulation."}
+                ? "Our AI has detected some potential signs of manipulation in this video."
+                : "Our AI analysis indicates this is likely an authentic video without significant signs of deepfake manipulation."}
           </p>
 
           <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-background">
@@ -322,8 +322,8 @@ export default function DetectPage() {
                 fakeFramesPercentage > 30
                   ? "destructive"
                   : fakeFramesPercentage > 10
-                  ? "outline"
-                  : "default"
+                    ? "outline"
+                    : "default"
               }
             >
               {video_analysis.fake_frames_detected} /{" "}
@@ -423,8 +423,8 @@ export default function DetectPage() {
                     {fakeFramesPercentage > 30
                       ? "This video shows significant signs of AI manipulation consistent with deepfake technology. Multiple frames were flagged as potentially fake."
                       : fakeFramesPercentage > 10
-                      ? "This video shows some signs of potential manipulation. A small number of frames were flagged as suspicious."
-                      : "This video appears to be authentic. Our analysis found natural patterns and consistent features throughout the video."}
+                        ? "This video shows some signs of potential manipulation. A small number of frames were flagged as suspicious."
+                        : "This video appears to be authentic. Our analysis found natural patterns and consistent features throughout the video."}
                   </p>
                 </div>
 
@@ -453,8 +453,8 @@ export default function DetectPage() {
                         fakeFramesPercentage > 30
                           ? "text-destructive"
                           : fakeFramesPercentage > 10
-                          ? "text-amber-500"
-                          : "text-green-500"
+                            ? "text-amber-500"
+                            : "text-green-500"
                       )}
                     >
                       {video_analysis.fake_frames_detected} (
@@ -468,18 +468,18 @@ export default function DetectPage() {
                     </h4>
                     <p className="text-xs text-muted-foreground">
                       {typeof lip_sync_analysis === "object" &&
-                      lip_sync_analysis.error
+                        lip_sync_analysis.error
                         ? "Analysis failed"
                         : typeof lip_sync_analysis === "object" &&
                           lip_sync_analysis.fake_probability !== undefined
-                        ? lip_sync_analysis.fake_probability > 0.5
-                          ? "Potential mismatch detected"
-                          : "No issues detected"
-                        : typeof lip_sync_analysis === "number"
-                        ? lip_sync_analysis < 0.5
-                          ? "Potential mismatch detected"
-                          : "No issues detected"
-                        : "Analysis unavailable"}
+                          ? lip_sync_analysis.fake_probability > 0.5
+                            ? "Potential mismatch detected"
+                            : "No issues detected"
+                          : typeof lip_sync_analysis === "number"
+                            ? lip_sync_analysis < 0.5
+                              ? "Potential mismatch detected"
+                              : "No issues detected"
+                            : "Analysis unavailable"}
                     </p>
                   </div>
                 </div>
@@ -550,7 +550,7 @@ export default function DetectPage() {
                 </div>
 
                 {typeof lip_sync_analysis === "object" &&
-                lip_sync_analysis.error ? (
+                  lip_sync_analysis.error ? (
                   <div className="p-4 bg-muted rounded-lg">
                     <p className="text-sm">
                       {lip_sync_analysis.description || lip_sync_analysis.error}
@@ -645,14 +645,14 @@ export default function DetectPage() {
                       <p className="text-sm">
                         {typeof lip_sync_analysis === "object"
                           ? lip_sync_analysis.description ||
-                            (lip_sync_analysis.fake_probability > 0.5
-                              ? "Potential lip sync mismatch detected, suggesting possible manipulation."
-                              : "No significant lip sync issues detected.")
-                          : typeof lip_sync_analysis === "number"
-                          ? lip_sync_analysis < 0.5
+                          (lip_sync_analysis.fake_probability > 0.5
                             ? "Potential lip sync mismatch detected, suggesting possible manipulation."
-                            : "No significant lip sync issues detected."
-                          : "Analysis unavailable"}
+                            : "No significant lip sync issues detected.")
+                          : typeof lip_sync_analysis === "number"
+                            ? lip_sync_analysis < 0.5
+                              ? "Potential lip sync mismatch detected, suggesting possible manipulation."
+                              : "No significant lip sync issues detected."
+                            : "Analysis unavailable"}
                       </p>
                     </div>
 
@@ -912,7 +912,7 @@ export default function DetectPage() {
                               >
                                 <div className="space-y-4">
                                   {results.deepfake &&
-                                  Array.isArray(results.deepfake) ? (
+                                    Array.isArray(results.deepfake) ? (
                                     results.deepfake.map(
                                       (item: any, idx: number) => (
                                         <div key={idx} className="space-y-2">
@@ -974,6 +974,21 @@ export default function DetectPage() {
                                           method === "error"
                                         )
                                           return null;
+
+                                        // Handle data structure from XAIExplainer
+                                        let imageUrl = "";
+                                        if (typeof data === "object" && data !== null) {
+                                          // Prefer overlay if available, otherwise saliency
+                                          if (data.overlay) imageUrl = data.overlay;
+                                          else if (data.saliency) imageUrl = data.saliency;
+                                          else if (data.visualization) imageUrl = data.visualization.startsWith("data:") ? data.visualization : `data:image/png;base64,${data.visualization}`;
+                                        } else if (typeof data === "string") {
+                                          // Handle raw base64 string
+                                          imageUrl = data.startsWith("data:") ? data : `data:image/png;base64,${data}`;
+                                        }
+
+                                        if (!imageUrl) return null;
+
                                         return (
                                           <div
                                             key={method}
@@ -981,7 +996,7 @@ export default function DetectPage() {
                                           >
                                             <div className="aspect-square rounded-lg overflow-hidden border bg-muted relative group">
                                               <img
-                                                src={`data:image/png;base64,${data}`}
+                                                src={imageUrl}
                                                 alt={`${method} Heatmap`}
                                                 className="w-full h-full object-cover"
                                               />
