@@ -1,216 +1,145 @@
-# AntiBanana Chrome Extension - Installation Guide
+# 🚀 AntiBanana Extension - Quick Installation Guide
 
-## 🍌 Welcome to AntiBanana!
+## Step-by-Step Installation
 
-A powerful Chrome extension for deepfake detection, image protection, C2PA verification, and AI explainability.
+### 1️⃣ Start the Backend Server
 
----
-
-## 📋 Prerequisites
-
-Before installing the extension, make sure you have:
-
-1. **Google Chrome Browser** (version 88 or higher)
-2. **Backend Server Running** on `http://localhost:5000`
-   - Navigate to the backend folder: `cd AntiBanana/backend`
-   - Start the server: `py main.py`
-   - Verify it's running by visiting: http://localhost:5000/health
-
----
-
-## 🚀 Installation Steps
-
-### Step 1: Open Chrome Extensions Page
-
-1. Open **Google Chrome**
-2. Click the **three dots menu** (⋮) in the top-right corner
-3. Navigate to: **Extensions** → **Manage Extensions**
-   
-   *Or simply type in the address bar:* `chrome://extensions/`
-
-### Step 2: Enable Developer Mode
-
-1. On the Extensions page, look for the **"Developer mode"** toggle in the **top-right corner**
-2. **Turn it ON** (it should turn blue/enabled)
-
-### Step 3: Load the Extension
-
-1. Click the **"Load unpacked"** button (appears after enabling Developer mode)
-2. Navigate to your AntiBanana project folder
-3. Select the **`chrome-extension`** folder:
-   ```
-   C:\Users\kamal\Desktop\RIT\Projects\bit\real\AntiBanana\chrome-extension
-   ```
-4. Click **"Select Folder"**
-
-### Step 4: Verify Installation
-
-✅ You should see the **AntiBanana** extension card appear with:
-- 🍌 Banana icon
-- Name: "AntiBanana - Deepfake Protection Suite"
-- Version: 1.0.0
-- Status: **Enabled** (toggle should be ON)
-
-### Step 5: Pin the Extension (Optional but Recommended)
-
-1. Click the **puzzle piece icon** (🧩) in Chrome's toolbar
-2. Find **AntiBanana** in the list
-3. Click the **pin icon** (📌) next to it
-4. The extension icon will now appear in your toolbar for easy access
-
----
-
-## 🎯 Using the Extension
-
-### Opening the Extension
-- Click the 🍌 **AntiBanana icon** in your Chrome toolbar
-- The popup window will open with 4 main tabs
-
-### Features Overview
-
-#### 1. 🔍 **Detect Tab**
-- Upload an image to check if it's a deepfake
-- Options:
-  - ✅ Include C2PA Verification
-  - ✅ Enable XAI Explanations
-- Click **"Analyze Image"** to get results
-
-#### 2. 🛡️ **Protect Tab**
-- Upload an image to protect it against deepfake generation
-- Choose protection strength:
-  - Medium (default)
-  - High
-  - Extreme
-- Click **"Protect Image"** and download the protected version
-
-#### 3. 📜 **C2PA Tab**
-- Verify C2PA provenance and chain of custody
-- Upload an image to check for content credentials
-- View detailed manifest information
-
-#### 4. 💡 **Explain Tab**
-- Generate explainability visualizations
-- Methods available:
-  - All Methods (LIME, SHAP, Grad-CAM)
-  - Individual methods
-- Quick mode option for faster processing
-
-### Settings
-
-At the bottom of the popup, you can configure:
-- **Backend URL**: Default is `http://localhost:5000`
-- Click **"Save"** after making changes
-
----
-
-## 🔧 Troubleshooting
-
-### Extension Not Loading?
-- **Check Developer Mode**: Make sure it's enabled
-- **Correct Folder**: Ensure you selected the `chrome-extension` folder, not the parent folder
-- **Manifest Errors**: Check the Extensions page for any error messages
-
-### Server Connection Issues?
-- **Status Indicator**: Check the status in the top-right of the extension
-  - 🟢 Green = Connected
-  - 🔴 Red = Offline
-- **Verify Backend**: Open http://localhost:5000/health in your browser
-- **Port Conflicts**: Make sure nothing else is using port 5000
-- **Update URL**: If using a different port/host, update it in Settings
-
-### Images Not Processing?
-- **File Format**: Only image files are supported (JPG, PNG, WebP, etc.)
-- **File Size**: Very large images may take longer to process
-- **Backend Logs**: Check the terminal where the backend is running for errors
-
-### Extension Crashes?
-1. Go to `chrome://extensions/`
-2. Find AntiBanana
-3. Click **"Reload"** (🔄) button
-4. Try again
-
----
-
-## 🔄 Updating the Extension
-
-When you make changes to the extension code:
-
-1. Go to `chrome://extensions/`
-2. Find the **AntiBanana** extension
-3. Click the **Reload** button (🔄)
-4. The extension will reload with your changes
-
----
-
-## 🗑️ Uninstalling
-
-To remove the extension:
-
-1. Go to `chrome://extensions/`
-2. Find **AntiBanana**
-3. Click **"Remove"**
-4. Confirm the removal
-
----
-
-## 📊 Backend Requirements
-
-Make sure your backend server is running with all required dependencies:
+Open a terminal and navigate to the backend directory:
 
 ```bash
 cd backend
-pip install -r requirements.txt
-py main.py
+python main.py
 ```
 
-The extension requires these endpoints to be available:
-- `/health` - Server status check
-- `/detect` - Deepfake detection
-- `/protect` - Image protection (MMHI)
-- `/c2pa` - C2PA verification
-- `/explain` - Explainability generation
+You should see:
+```
+✅ Server running on http://localhost:5000
+```
+
+**Keep this terminal open!** The extension needs the backend running.
 
 ---
 
-## 🎨 Features at a Glance
+### 2️⃣ Install the Chrome Extension
 
-- ✅ **Modern UI** with gradient design and smooth animations
-- ✅ **Tab-based Interface** for easy navigation
-- ✅ **Drag & Drop** support for image uploads
-- ✅ **Real-time Status** indicator for backend connection
-- ✅ **Progress Indicators** during processing
-- ✅ **Result Visualization** with images and metrics
-- ✅ **Download Protected Images** directly from the extension
-- ✅ **Persistent Settings** saved in Chrome storage
+1. **Open Chrome Extensions Page**
+   - Navigate to `chrome://extensions/` in your browser
+   - Or click: Menu → More Tools → Extensions
 
----
+2. **Enable Developer Mode**
+   - Toggle the **Developer mode** switch in the top-right corner
 
-## 📝 Notes
+3. **Load the Extension**
+   - Click **Load unpacked** button
+   - Navigate to `AntiBanana/chrome-extension` folder
+   - Click **Select Folder**
 
-- **Local Development**: This extension is configured for local development with the backend running on `localhost:5000`
-- **Production Use**: To use with a remote backend, update the Backend URL in Settings
-- **Privacy**: All processing happens on your configured backend server
-- **Offline Mode**: The extension requires an active connection to the backend server
+4. **Verify Installation**
+   - You should see "AntiBanana - Deepfake Protection Suite" in your extensions
+   - Pin it to toolbar by clicking the pin icon
 
 ---
 
-## 🆘 Need Help?
+### 3️⃣ Test the Extension
 
-If you encounter issues:
+#### Test 1: Check Connection
+1. Click the AntiBanana icon in Chrome toolbar
+2. Check the status indicator at the top
+3. Should show **Connected** with a green dot
 
-1. Check the **browser console**: Right-click the extension popup → **Inspect** → **Console tab**
-2. Check **backend logs** in the terminal where the server is running
-3. Verify all backend dependencies are installed
-4. Ensure the backend server is running and accessible
+#### Test 2: Detect an Image
+1. In the extension popup, stay on the **Detect** tab
+2. Ensure **Image** is selected
+3. Click or drag an image file
+4. Click **Analyze Media**
+5. View results
+
+#### Test 3: WhatsApp Web
+1. Open https://web.whatsapp.com/
+2. Navigate to a chat with images
+3. Look for **🍌 Detect** buttons on images
+4. Click to analyze
+
+#### Test 4: Instagram
+1. Open https://www.instagram.com/
+2. Browse your feed
+3. Look for **🍌 Detect** buttons on posts
+4. Click to analyze
+
+---
+
+## ✅ Success Checklist
+
+- [ ] Backend server is running
+- [ ] Extension shows "Connected" status
+- [ ] Can upload and detect images in popup
+- [ ] Can detect videos in popup (try with MP4 file)
+- [ ] Detect buttons appear on WhatsApp Web
+- [ ] Detect buttons appear on Instagram
+- [ ] Results popup appears after detection
+
+---
+
+## ❌ Troubleshooting
+
+### Backend Won't Start
+**Error**: ModuleNotFoundError or similar
+
+**Solution**:
+```bash
+pip install -r requirements.txt
+```
+
+### Extension Shows "Offline"
+**Problem**: Cannot connect to backend
+
+**Solutions**:
+1. Check backend is running on port 5000
+2. In extension popup, verify Backend URL is `http://localhost:5000`
+3. Click **Save** after changing URL
+4. Refresh the page
+
+### No Detect Buttons on WhatsApp/Instagram
+**Problem**: Buttons don't appear
+
+**Solutions**:
+1. Refresh the page (F5 or Ctrl+R)
+2. Wait a few seconds for page to load fully
+3. Check extension is enabled in `chrome://extensions/`
+4. Try clicking the extension icon and checking connection
+
+### Detection Fails
+**Problem**: Gets error during detection
+
+**Solutions**:
+1. Check backend terminal for error messages
+2. Try a smaller file
+3. For videos, reduce frame samples to 20
+4. Restart backend server
 
 ---
 
 ## 🎉 You're All Set!
 
-Your AntiBanana Chrome extension is ready to use. Start detecting deepfakes, protecting images, and verifying content provenance right from your browser!
+The extension is now fully functional. Explore all the features:
+
+- **Detect Tab**: Upload any image or video
+- **Protect Tab**: Protect images before sharing
+- **C2PA Tab**: Verify content provenance
+- **Explain Tab**: Get AI explanations
+
+**On WhatsApp/Instagram**: Just click the 🍌 buttons!
 
 ---
 
-**Version**: 1.0.0  
-**Last Updated**: November 2025  
-**Project**: AntiBanana - Deepfake Protection Suite
+## 📚 Next Steps
+
+1. Read the full [README.md](./README.md) for detailed features
+2. Check [TESTING_GUIDE.md](./TESTING_GUIDE.md) for comprehensive testing
+3. Review [WHATSAPP_INTEGRATION.md](./WHATSAPP_INTEGRATION.md) for WhatsApp details
+
+---
+
+**Need Help?** Open an issue in the main repository.
+
+**Enjoy protecting authenticity with AntiBanana! 🍌**
