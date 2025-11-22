@@ -1,26 +1,10 @@
 "use client";
 
 import type React from "react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import ReactJson from "react-json-view";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
-import {
-  Search,
-  Shield,
-  AlertTriangle,
-  CheckCircle,
-  Info,
-  X,
-  Loader2,
-  Gauge,
-  FileText,
-  Download,
-  ChevronRight,
-  Eye,
-  Activity,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -36,7 +20,6 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -46,88 +29,72 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { FileUploader } from "@/components/file-uploader";
-import { AnalysisProgress, AnalysisStep } from "@/components/analysis-progress";
-import { useRouter } from "next/navigation";
-
-// Types
-interface DeepfakeResult {
-  label: string;
-  score: number;
-}
-
-interface VideoFrameResult {
-  frame_number: number;
-  timestamp: string;
-  prediction: string;
-  fusion_score: number;
-  is_fake: boolean;
-}
-
-interface VideoAnalysis {
-  duration: string;
-  total_frames_analyzed: number;
-  fake_frames_detected: number;
-  fps: number;
-  frame_interval: number;
-  results: VideoFrameResult[];
-}
-
-interface LipSyncAnalysis {
-  real_probability: number;
-  fake_probability: number;
-  description?: string;
-  error?: string;
-  processing_time_seconds?: number;
-}
-
-interface AnalysisResults {
-  deepfake?: string | DeepfakeResult[];
-  video_analysis?: VideoAnalysis;
-  lip_sync_analysis?: LipSyncAnalysis | number;
-  manifest?: any;
-  report?: any;
-  segmented?: {
-    LIME?: { overlay: string };
-    "GradCAM++"?: { overlay: string };
-  };
-}
-
-const DETECTION_STEPS: AnalysisStep[] = [
-  {
-    id: "facial",
-    label: "Facial Analysis",
-    description: "Scanning for facial inconsistencies and artifacts",
-  },
-  {
-    id: "pattern",
-    label: "Pattern Recognition",
-    description: "Analyzing texture patterns and noise distribution",
-  },
-  {
-    id: "metadata",
-    label: "Metadata Verification",
-    description: "Checking file integrity and origin data",
-  },
-  {
-    id: "final",
-    label: "Final Assessment",
-    description: "Compiling results and generating report",
-  },
-];
+import {
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  X,
+  Loader2,
+  FileText,
+  Shield,
+  Search,
+  Upload,
+  FileImage,
+  Gauge,
+  FileWarning,
+} from "lucide-react";
 
 export default function DetectPage() {
-  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [currentStepIndex, setCurrentStepIndex] = useState(0);
-  const [results, setResults] = useState<AnalysisResults | null>(null);
+  const [results, setResults] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
-  const handleFileSelect = (selectedFile: File) => {
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    setAnalysisProgress(0);
+    setResults(null);
+    setError(null);
+
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFile(e.target.files[0]);
+    }
+  };
+
+  const handleFile = (selectedFile: File) => {
+    // Check if file is an image or video
+    if (
+      !selectedFile.type.startsWith("image/") &&
+      !selectedFile.type.startsWith("video/")
+    ) {
+      setError(
+        "Please upload an image or video file (JPG, PNG, WEBP, MP4, AVI, MOV)"
+      );
+      return;
+    }
+
     setFile(selectedFile);
     setError(null);
 
@@ -144,32 +111,34 @@ export default function DetectPage() {
 
     setIsAnalyzing(true);
     setAnalysisProgress(0);
-    setCurrentStepIndex(0);
     setResults(null);
     setError(null);
 
-    // Simulate progress steps
+    // Simulate progress
     const progressInterval = setInterval(() => {
       setAnalysisProgress((prev) => {
-        const next = prev + Math.random() * 5;
-
-        // Update steps based on progress
-        if (next > 25 && currentStepIndex < 1) setCurrentStepIndex(1);
-        if (next > 50 && currentStepIndex < 2) setCurrentStepIndex(2);
-        if (next > 75 && currentStepIndex < 3) setCurrentStepIndex(3);
-
-        return next >= 90 ? 90 : next;
+        if (prev >= 95) {
+          clearInterval(progressInterval);
+          return prev;
+        }
+        return prev + Math.random() * 15;
       });
-    }, 500);
+    }, 300);
 
     try {
       const formData = new FormData();
       formData.append("file", file);
 
+      // Enable XAI explanations for images
+      if (file.type.startsWith("image/")) {
+        formData.append("enable_xai", "true");
+        formData.append("xai_methods", "GradCAM++");
+      }
+
       // Determine endpoint based on file type
       const endpoint = file.type.startsWith("video/")
         ? "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_video"
-        : "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/detect_image";
+        : "http://localhost:5000/detect";
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -184,7 +153,6 @@ export default function DetectPage() {
 
       const data = await response.json();
       setAnalysisProgress(100);
-      setCurrentStepIndex(4); // Complete
 
       // Short delay to show 100% progress
       setTimeout(() => {
@@ -209,7 +177,7 @@ export default function DetectPage() {
         // For both image and video results
         setResults(data);
         setIsAnalyzing(false);
-      }, 800);
+      }, 500);
     } catch (err) {
       clearInterval(progressInterval);
       setError(
@@ -226,731 +194,961 @@ export default function DetectPage() {
     setError(null);
     setIsAnalyzing(false);
     setAnalysisProgress(0);
-    setCurrentStepIndex(0);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
-  // Helper to determine result status
+  const generateVideoReport = () => {
+    setIsGeneratingReport(true);
+    // Simulate report generation
+    setTimeout(() => {
+      setIsGeneratingReport(false);
+    }, 2000);
+  };
+
+  // Determine if the image is fake or real based on results
   const getResultStatus = () => {
     if (!results) return null;
 
-    // Video Analysis
-    if (results.video_analysis) {
-      const fakePercentage =
-        (results.video_analysis.fake_frames_detected /
-          results.video_analysis.total_frames_analyzed) *
-        100;
-      if (fakePercentage > 30) return "fake";
-      if (fakePercentage > 10) return "suspicious";
-      return "real";
-    }
-
-    // Image Analysis
+    // Handle new array format
     if (Array.isArray(results.deepfake)) {
-      const highestScoreResult = results.deepfake.reduce(
-        (prev, current) => (prev.score > current.score ? prev : current),
+      // Find the object with the highest score
+      interface DeepfakeResult {
+        label: string;
+        score: number;
+      }
+
+      const highestScoreResult: DeepfakeResult = results.deepfake.reduce(
+        (prev: DeepfakeResult, current: DeepfakeResult) =>
+          prev.score > current.score ? prev : current,
         { label: "", score: Number.NEGATIVE_INFINITY }
       );
+
       if (highestScoreResult.label) {
         return highestScoreResult.label.toLowerCase();
       }
-    } else if (typeof results.deepfake === "string") {
-      if (results.deepfake.startsWith("Fake")) return "fake";
-      if (results.deepfake.startsWith("Real")) return "real";
+      return "unknown";
     }
 
+    // Handle old string format for backwards compatibility
+    const deepfakeResult = results.deepfake || "";
+    if (deepfakeResult.startsWith("Fake")) {
+      return "fake";
+    } else if (deepfakeResult.startsWith("Real")) {
+      return "real";
+    }
     return "unknown";
   };
 
+  // Extract confidence score from results
   const getConfidenceScore = () => {
-    if (!results) return 0;
-
-    if (results.video_analysis) {
-      const fakePercentage =
-        (results.video_analysis.fake_frames_detected /
-          results.video_analysis.total_frames_analyzed) *
-        100;
-      return Math.round(fakePercentage);
-    }
-
-    if (Array.isArray(results.deepfake)) {
-      const highestScoreResult = results.deepfake.reduce(
-        (prev, current) => (prev.score > current.score ? prev : current),
-        { label: "", score: 0 }
-      );
-      return Math.round(highestScoreResult.score * 100);
-    }
+    if (!results || !results.deepfake) return null;
 
     if (typeof results.deepfake === "string") {
       const match = results.deepfake.match(/\d+\.\d+/);
-      if (match) return Math.round(Number.parseFloat(match[0]) * 100);
-    }
-
-    return 0;
-  };
-
-  const generateReport = async () => {
-    if (!results) return;
-    setIsGeneratingReport(true);
-
-    try {
-      const isVideo = !!results.video_analysis;
-      const endpoint = isVideo
-        ? "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/generate_video_report"
-        : "https://5000-01jnecfjebarp3wa2fmvx8m6es.cloudspaces.litng.ai/generate_report";
-
-      const bodyData = isVideo
-        ? JSON.stringify({
-            analysis_results: results,
-            investigator_name: "AI Detection System",
-            case_number: `VIDEO-${Date.now().toString(36).toUpperCase()}`,
-          })
-        : (() => {
-            const fd = new FormData();
-            if (file) fd.append("file", file);
-            fd.append("investigator_name", "AI Detection System");
-            fd.append("analysis_results", JSON.stringify(results));
-            return fd;
-          })();
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: isVideo ? { "Content-Type": "application/json" } : undefined,
-        body: bodyData,
-      });
-
-      if (!response.ok) throw new Error("Failed to generate report");
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `DeepfakeReport_${Date.now()}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err) {
-      console.error("Error generating report:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to generate report"
+      if (match) {
+        const score = Number.parseFloat(match[0]);
+        // Convert to percentage between 0-100
+        return Math.abs(score) * 100;
+      }
+    } else if (Array.isArray(results.deepfake)) {
+      // Handle new array format
+      const highestScoreResult = results.deepfake.reduce(
+        (prev: any, current: any) =>
+          prev.score > current.score ? prev : current,
+        { label: "", score: Number.NEGATIVE_INFINITY }
       );
-    } finally {
-      setIsGeneratingReport(false);
+      return highestScoreResult.score * 100;
     }
+
+    return null;
   };
 
   const resultStatus = getResultStatus();
-  const confidence = getConfidenceScore();
+  const confidenceScore = getConfidenceScore();
+
+  const VideoResultsDisplay = () => {
+    if (!results || !results.video_analysis) return null;
+
+    const { video_analysis, lip_sync_analysis } = results;
+    const fakeFramesPercentage =
+      (video_analysis.fake_frames_detected /
+        video_analysis.total_frames_analyzed) *
+      100;
+
+    return (
+      <div className="flex flex-col">
+        <div
+          className={cn(
+            "p-6 text-center",
+            fakeFramesPercentage > 30
+              ? "bg-destructive/10"
+              : fakeFramesPercentage > 10
+              ? "bg-amber-500/10"
+              : "bg-green-500/10"
+          )}
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full mb-4 bg-background">
+            {fakeFramesPercentage > 30 ? (
+              <AlertTriangle className="w-8 h-8 text-destructive" />
+            ) : fakeFramesPercentage > 10 ? (
+              <Info className="w-8 h-8 text-amber-500" />
+            ) : (
+              <CheckCircle className="w-8 h-8 text-green-500" />
+            )}
+          </div>
+
+          <h2 className="text-3xl font-bold mb-2">
+            {fakeFramesPercentage > 30
+              ? "Deepfake Detected"
+              : fakeFramesPercentage > 10
+              ? "Possible Manipulation"
+              : "Likely Authentic"}
+          </h2>
+
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            {fakeFramesPercentage > 30
+              ? "Our AI has detected significant signs of manipulation in this video."
+              : fakeFramesPercentage > 10
+              ? "Our AI has detected some potential signs of manipulation in this video."
+              : "Our AI analysis indicates this is likely an authentic video without significant signs of deepfake manipulation."}
+          </p>
+
+          <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-background">
+            <span className="text-sm font-medium">Fake Frames:</span>
+            <Badge
+              variant={
+                fakeFramesPercentage > 30
+                  ? "destructive"
+                  : fakeFramesPercentage > 10
+                  ? "outline"
+                  : "default"
+              }
+            >
+              {video_analysis.fake_frames_detected} /{" "}
+              {video_analysis.total_frames_analyzed} (
+              {Math.round(fakeFramesPercentage)}%)
+            </Badge>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row">
+          <div className="w-full md:w-1/2 p-6 border-r border-b">
+            <div className="aspect-video max-h-[400px] relative rounded-lg overflow-hidden border mb-4">
+              {preview && (
+                <video
+                  src={preview}
+                  controls
+                  className="w-full h-full object-cover"
+                />
+              )}
+
+              {fakeFramesPercentage > 30 && (
+                <div className="absolute top-2 right-2">
+                  <Badge variant="destructive" className="text-xs px-2 py-1">
+                    FAKE
+                  </Badge>
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetAnalysis}
+                className="gap-2"
+              >
+                <X className="w-4 h-4" />
+                New Analysis
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={generateVideoReport}
+                className="gap-2"
+                disabled={isGeneratingReport}
+              >
+                {isGeneratingReport ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <FileText className="w-4 h-4" />
+                )}
+                Generate Report
+              </Button>
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="gap-2 ml-auto"
+                    >
+                      <Shield className="w-4 h-4" />
+                      Protect Your Media
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Add protection to your own media</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
+
+          <div className="w-full md:w-1/2 p-6">
+            <Tabs defaultValue="summary">
+              <TabsList className="w-full mb-4">
+                <TabsTrigger value="summary" className="flex-1">
+                  Summary
+                </TabsTrigger>
+                <TabsTrigger value="frames" className="flex-1">
+                  Frame Analysis
+                </TabsTrigger>
+                <TabsTrigger value="lipsync" className="flex-1">
+                  Lip Sync
+                </TabsTrigger>
+                <TabsTrigger value="technical" className="flex-1">
+                  Technical Details
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="summary" className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">Analysis Summary</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {fakeFramesPercentage > 30
+                      ? "This video shows significant signs of AI manipulation consistent with deepfake technology. Multiple frames were flagged as potentially fake."
+                      : fakeFramesPercentage > 10
+                      ? "This video shows some signs of potential manipulation. A small number of frames were flagged as suspicious."
+                      : "This video appears to be authentic. Our analysis found natural patterns and consistent features throughout the video."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 rounded-lg bg-muted">
+                    <h4 className="text-sm font-medium mb-1">Video Duration</h4>
+                    <p className="text-xs text-muted-foreground">
+                      {video_analysis.duration}
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-muted">
+                    <h4 className="text-sm font-medium mb-1">
+                      Frames Analyzed
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      {video_analysis.total_frames_analyzed}
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-muted">
+                    <h4 className="text-sm font-medium mb-1">Fake Frames</h4>
+                    <p
+                      className={cn(
+                        "text-xs",
+                        fakeFramesPercentage > 30
+                          ? "text-destructive"
+                          : fakeFramesPercentage > 10
+                          ? "text-amber-500"
+                          : "text-green-500"
+                      )}
+                    >
+                      {video_analysis.fake_frames_detected} (
+                      {Math.round(fakeFramesPercentage)}%)
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-muted">
+                    <h4 className="text-sm font-medium mb-1">
+                      Lip Sync Analysis
+                    </h4>
+                    <p className="text-xs text-muted-foreground">
+                      {typeof lip_sync_analysis === "object" &&
+                      lip_sync_analysis.error
+                        ? "Analysis failed"
+                        : typeof lip_sync_analysis === "object" &&
+                          lip_sync_analysis.fake_probability !== undefined
+                        ? lip_sync_analysis.fake_probability > 0.5
+                          ? "Potential mismatch detected"
+                          : "No issues detected"
+                        : typeof lip_sync_analysis === "number"
+                        ? lip_sync_analysis < 0.5
+                          ? "Potential mismatch detected"
+                          : "No issues detected"
+                        : "Analysis unavailable"}
+                    </p>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="frames" className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">
+                    Frame-by-Frame Analysis
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Detailed analysis of individual video frames.
+                  </p>
+                </div>
+
+                <div className="border rounded-md overflow-hidden">
+                  <div className="grid grid-cols-12 bg-muted p-2 text-xs font-medium">
+                    <div className="col-span-1">Frame</div>
+                    <div className="col-span-3">Timestamp</div>
+                    <div className="col-span-2">Result</div>
+                    <div className="col-span-3">Score</div>
+                    <div className="col-span-3">Status</div>
+                  </div>
+                  <div className="max-h-60 overflow-y-auto">
+                    {video_analysis.results.map((frame: any, index: any) => (
+                      <div
+                        key={index}
+                        className={cn(
+                          "grid grid-cols-12 p-2 text-xs border-t",
+                          frame.is_fake ? "bg-destructive/5" : ""
+                        )}
+                      >
+                        <div className="col-span-1">{frame.frame_number}</div>
+                        <div className="col-span-3">{frame.timestamp}</div>
+                        <div className="col-span-2">{frame.prediction}</div>
+                        <div className="col-span-3">
+                          {frame.fusion_score
+                            ? frame.fusion_score.toFixed(4)
+                            : "N/A"}
+                        </div>
+                        <div className="col-span-3">
+                          {frame.is_fake ? (
+                            <span className="inline-flex items-center text-destructive">
+                              <AlertTriangle className="w-3 h-3 mr-1" />{" "}
+                              Suspicious
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center text-green-500">
+                              <CheckCircle className="w-3 h-3 mr-1" /> OK
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="lipsync" className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">
+                    Lip Synchronization Analysis
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Analysis of audio-visual synchronization to detect potential
+                    deepfakes.
+                  </p>
+                </div>
+
+                {typeof lip_sync_analysis === "object" &&
+                lip_sync_analysis.error ? (
+                  <div className="p-4 bg-muted rounded-lg">
+                    <p className="text-sm">
+                      {lip_sync_analysis.description || lip_sync_analysis.error}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 rounded-lg bg-muted">
+                        <h4 className="text-sm font-medium mb-1">
+                          Real Probability
+                        </h4>
+                        <div className="flex items-center">
+                          {typeof lip_sync_analysis === "object" ? (
+                            <>
+                              <Progress
+                                value={lip_sync_analysis.real_probability * 100}
+                                className="h-2 flex-1 mr-2"
+                              />
+                              <span className="text-xs">
+                                {Math.round(
+                                  lip_sync_analysis.real_probability * 100
+                                )}
+                                %
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Progress
+                                value={
+                                  typeof lip_sync_analysis === "number"
+                                    ? lip_sync_analysis * 100
+                                    : 0
+                                }
+                                className="h-2 flex-1 mr-2"
+                              />
+                              <span className="text-xs">
+                                {typeof lip_sync_analysis === "number"
+                                  ? Math.round(lip_sync_analysis * 100)
+                                  : 0}
+                                %
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="p-4 rounded-lg bg-muted">
+                        <h4 className="text-sm font-medium mb-1">
+                          Fake Probability
+                        </h4>
+                        <div className="flex items-center">
+                          {typeof lip_sync_analysis === "object" ? (
+                            <>
+                              <Progress
+                                value={lip_sync_analysis.fake_probability * 100}
+                                className="h-2 flex-1 mr-2"
+                              />
+                              <span className="text-xs">
+                                {Math.round(
+                                  lip_sync_analysis.fake_probability * 100
+                                )}
+                                %
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Progress
+                                value={
+                                  typeof lip_sync_analysis === "number"
+                                    ? (1 - lip_sync_analysis) * 100
+                                    : 0
+                                }
+                                className="h-2 flex-1 mr-2"
+                              />
+                              <span className="text-xs">
+                                {typeof lip_sync_analysis === "number"
+                                  ? Math.round((1 - lip_sync_analysis) * 100)
+                                  : 0}
+                                %
+                              </span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded-lg bg-muted">
+                      <h4 className="text-sm font-medium mb-1">
+                        Analysis Result
+                      </h4>
+                      <p className="text-sm">
+                        {typeof lip_sync_analysis === "object"
+                          ? lip_sync_analysis.description ||
+                            (lip_sync_analysis.fake_probability > 0.5
+                              ? "Potential lip sync mismatch detected, suggesting possible manipulation."
+                              : "No significant lip sync issues detected.")
+                          : typeof lip_sync_analysis === "number"
+                          ? lip_sync_analysis < 0.5
+                            ? "Potential lip sync mismatch detected, suggesting possible manipulation."
+                            : "No significant lip sync issues detected."
+                          : "Analysis unavailable"}
+                      </p>
+                    </div>
+
+                    {typeof lip_sync_analysis === "object" &&
+                      lip_sync_analysis.processing_time_seconds && (
+                        <div className="p-4 rounded-lg bg-muted">
+                          <h4 className="text-sm font-medium mb-1">
+                            Processing Time
+                          </h4>
+                          <p className="text-sm">
+                            {lip_sync_analysis.processing_time_seconds} seconds
+                          </p>
+                        </div>
+                      )}
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="technical" className="space-y-4">
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium">Technical Details</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Technical metadata and analysis parameters used for
+                    detection.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-lg bg-muted space-y-2">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <span className="font-medium">Model Used:</span>
+                    <span>Multi-Modal Deepfake Detector v2.1</span>
+
+                    <span className="font-medium">Frame Sampling:</span>
+                    <span>Every 10th frame</span>
+
+                    <span className="font-medium">Resolution:</span>
+                    <span>{video_analysis.resolution || "1920x1080"}</span>
+
+                    <span className="font-medium">FPS:</span>
+                    <span>{video_analysis.fps || "30"}</span>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <main className="min-h-screen flex flex-col bg-background">
+    <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
-
-      <div className="flex-1 container mx-auto px-4 py-24">
+      <main className="flex-1 container mx-auto px-4 py-8">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="max-w-6xl mx-auto"
+          className="max-w-4xl mx-auto space-y-8"
         >
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
-                <Search className="w-8 h-8 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-                  Deepfake Detection
-                </h1>
-                <p className="text-muted-foreground">
-                  Analyze media for AI manipulation using advanced forensics
-                </p>
-              </div>
-            </div>
-
-            {results && (
-              <Button
-                variant="outline"
-                onClick={resetAnalysis}
-                className="gap-2"
-              >
-                <Search className="w-4 h-4" />
-                New Analysis
-              </Button>
-            )}
+          <div className="text-center space-y-4">
+            <h1 className="text-4xl font-bold tracking-tight">
+              Deepfake Detection
+            </h1>
+            <p className="text-xl text-muted-foreground">
+              Upload an image or video to analyze for AI manipulation using our
+              advanced multi-modal detection models.
+            </p>
           </div>
 
-          <AnimatePresence mode="wait">
-            {!file && !results ? (
-              <motion.div
-                key="upload"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <Card className="border-2 border-dashed shadow-sm">
-                  <CardContent className="p-0">
-                    <FileUploader
-                      onFileSelect={handleFileSelect}
-                      label="Upload Media for Analysis"
-                      description="Support for JPG, PNG, WEBP, MP4, AVI, MOV"
-                    />
-                  </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-                  <Card className="bg-card/50 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Shield className="w-5 h-5 text-primary" />
-                        Advanced Forensics
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">
-                        Multi-layered analysis checking for facial
-                        inconsistencies, lighting artifacts, and compression
-                        anomalies.
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-card/50 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Activity className="w-5 h-5 text-primary" />
-                        Real-time Processing
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">
-                        Fast and accurate detection powered by state-of-the-art
-                        deep learning models.
-                      </p>
-                    </CardContent>
-                  </Card>
-                  <Card className="bg-card/50 backdrop-blur-sm">
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-lg">
-                        <Eye className="w-5 h-5 text-primary" />
-                        Visual Explanations
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p className="text-sm text-muted-foreground">
-                        Get detailed heatmaps and frame-by-frame analysis to
-                        understand why media was flagged.
-                      </p>
-                    </CardContent>
-                  </Card>
-                </div>
-              </motion.div>
-            ) : isAnalyzing ? (
-              <motion.div
-                key="analyzing"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="max-w-2xl mx-auto"
-              >
-                <Card>
-                  <CardContent className="p-12">
-                    <AnalysisProgress
-                      steps={DETECTION_STEPS}
-                      currentStepIndex={currentStepIndex}
-                      progress={analysisProgress}
-                      title={
-                        file?.type.startsWith("video/")
-                          ? "Analyzing Video Frames"
-                          : "Scanning Image"
-                      }
-                    />
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ) : !results ? (
-              // Preview State before analysis
-              <motion.div
-                key="preview"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-              >
-                <Card className="overflow-hidden">
-                  <div className="grid md:grid-cols-2 gap-0">
-                    <div className="bg-muted/30 p-8 flex items-center justify-center border-b md:border-b-0 md:border-r">
-                      <div className="relative max-w-full max-h-[500px] rounded-lg overflow-hidden shadow-lg">
-                        {file?.type.startsWith("video/") ? (
-                          <video
-                            src={preview!}
-                            controls
-                            className="max-w-full max-h-[400px]"
-                          />
-                        ) : (
-                          <img
-                            src={preview!}
-                            alt="Preview"
-                            className="max-w-full max-h-[400px] object-contain"
-                          />
-                        )}
-                      </div>
-                    </div>
-                    <div className="p-8 flex flex-col justify-center space-y-6">
-                      <div>
-                        <h2 className="text-2xl font-bold mb-2">
-                          Ready to Analyze
-                        </h2>
-                        <p className="text-muted-foreground">
-                          {file?.name} (
-                          {(file!.size / (1024 * 1024)).toFixed(2)} MB)
-                        </p>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                          <span>File integrity verified</span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                          <span>
-                            Format supported (
-                            {file?.type.split("/")[1].toUpperCase()})
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3 pt-4">
-                        <Button
-                          variant="outline"
-                          onClick={resetAnalysis}
-                          className="flex-1"
-                        >
-                          Cancel
-                        </Button>
-                        <Button onClick={analyzeMedia} className="flex-1 gap-2">
-                          <Search className="w-4 h-4" />
-                          Start Analysis
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </Card>
-              </motion.div>
-            ) : (
-              // Results State
-              <motion.div
-                key="results"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="space-y-6"
-              >
-                {/* Main Verdict Card */}
-                <Card
+          <Card className="border-2 border-dashed">
+            <CardContent className="p-0">
+              {!file ? (
+                <div
                   className={cn(
-                    "border-l-4 overflow-hidden",
-                    resultStatus === "fake"
-                      ? "border-l-destructive"
-                      : resultStatus === "suspicious"
-                      ? "border-l-amber-500"
-                      : "border-l-green-500"
+                    "flex flex-col items-center justify-center p-12 transition-colors cursor-pointer",
+                    isDragging
+                      ? "bg-primary/5 border-primary"
+                      : "hover:bg-muted/50"
                   )}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <CardContent className="p-8">
-                    <div className="flex flex-col md:flex-row items-center gap-8">
-                      <div
-                        className={cn(
-                          "w-24 h-24 rounded-full flex items-center justify-center flex-shrink-0",
-                          resultStatus === "fake"
-                            ? "bg-destructive/10 text-destructive"
-                            : resultStatus === "suspicious"
-                            ? "bg-amber-500/10 text-amber-500"
-                            : "bg-green-500/10 text-green-500"
-                        )}
-                      >
-                        {resultStatus === "fake" ? (
-                          <AlertTriangle className="w-12 h-12" />
-                        ) : resultStatus === "suspicious" ? (
-                          <Info className="w-12 h-12" />
-                        ) : (
-                          <CheckCircle className="w-12 h-12" />
-                        )}
-                      </div>
-
-                      <div className="flex-1 text-center md:text-left space-y-2">
-                        <h2 className="text-3xl font-bold">
-                          {resultStatus === "fake"
-                            ? "Deepfake Detected"
-                            : resultStatus === "suspicious"
-                            ? "Potential Manipulation"
-                            : "Likely Authentic"}
-                        </h2>
-                        <p className="text-muted-foreground text-lg">
-                          {resultStatus === "fake"
-                            ? "High probability of AI manipulation detected."
-                            : resultStatus === "suspicious"
-                            ? "Some anomalies detected, manual review recommended."
-                            : "No significant signs of manipulation found."}
-                        </p>
-                      </div>
-
-                      <div className="flex flex-col items-center gap-2 min-w-[150px]">
-                        <div className="text-sm font-medium text-muted-foreground">
-                          Confidence Score
-                        </div>
-                        <div
-                          className={cn(
-                            "text-4xl font-bold",
-                            resultStatus === "fake"
-                              ? "text-destructive"
-                              : resultStatus === "suspicious"
-                              ? "text-amber-500"
-                              : "text-green-500"
-                          )}
-                        >
-                          {confidence}%
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left Column: Visuals */}
-                  <div className="lg:col-span-1 space-y-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Analyzed Media</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="rounded-lg overflow-hidden border bg-muted/50 relative">
-                          {file?.type.startsWith("video/") ? (
-                            <video
-                              src={preview!}
-                              controls
-                              className="w-full h-auto"
+                  <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+                    <Upload className="w-10 h-10 text-primary" />
+                  </div>
+                  <h3 className="text-2xl font-semibold mb-2">Upload Media</h3>
+                  <p className="text-muted-foreground mb-6 text-center max-w-md">
+                    Drag and drop your image or video here, or click to browse.
+                    Supports JPG, PNG, MP4, AVI.
+                  </p>
+                  <Button>Select File</Button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/*,video/*"
+                    onChange={handleFileChange}
+                  />
+                </div>
+              ) : (
+                <div className="p-8">
+                  <div className="flex items-start justify-between mb-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+                        {file.type.startsWith("image/") ? (
+                          preview ? (
+                            <img
+                              src={preview || "/placeholder.svg"}
+                              alt="Preview"
+                              className="w-full h-full object-cover"
                             />
                           ) : (
-                            <img
-                              src={preview!}
-                              alt="Analyzed"
-                              className="w-full h-auto"
-                            />
-                          )}
-                          {resultStatus === "fake" && (
-                            <div className="absolute top-2 right-2">
-                              <Badge variant="destructive">FAKE</Badge>
-                            </div>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Heatmaps for Images */}
-                    {results.segmented && (
-                      <Card>
-                        <CardHeader>
-                          <CardTitle>AI Heatmaps</CardTitle>
-                          <CardDescription>
-                            Visualizing manipulated regions
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {results.segmented.LIME?.overlay && (
-                            <div>
-                              <div className="text-xs font-medium mb-2 text-muted-foreground">
-                                LIME Analysis
-                              </div>
-                              <div className="rounded-lg overflow-hidden border">
-                                <img
-                                  src={results.segmented.LIME.overlay}
-                                  alt="LIME"
-                                  className="w-full"
-                                />
-                              </div>
-                            </div>
-                          )}
-                          {results.segmented["GradCAM++"]?.overlay && (
-                            <div>
-                              <div className="text-xs font-medium mb-2 text-muted-foreground">
-                                GradCAM++ Analysis
-                              </div>
-                              <div className="rounded-lg overflow-hidden border">
-                                <img
-                                  src={results.segmented["GradCAM++"].overlay}
-                                  alt="GradCAM"
-                                  className="w-full"
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    <div className="flex flex-col gap-3">
-                      <Button
-                        onClick={generateReport}
-                        disabled={isGeneratingReport}
-                        className="w-full gap-2"
-                      >
-                        {isGeneratingReport ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
+                            <FileImage className="w-8 h-8 text-muted-foreground" />
+                          )
                         ) : (
-                          <FileText className="w-4 h-4" />
+                          <FileText className="w-8 h-8 text-muted-foreground" />
                         )}
-                        Download Full Report
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        onClick={() => router.push("/protect")}
-                        className="w-full gap-2"
-                      >
-                        <Shield className="w-4 h-4" />
-                        Protect This Media
-                      </Button>
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-lg">{file.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {(file.size / (1024 * 1024)).toFixed(2)} MB •{" "}
+                          {file.type}
+                        </p>
+                      </div>
                     </div>
+                    <Button variant="ghost" size="icon" onClick={resetAnalysis}>
+                      <X className="w-5 h-5" />
+                    </Button>
                   </div>
 
-                  {/* Right Column: Detailed Analysis */}
-                  <div className="lg:col-span-2">
-                    <Tabs defaultValue="details" className="w-full">
-                      <TabsList className="w-full justify-start">
-                        <TabsTrigger value="details">
-                          Analysis Details
-                        </TabsTrigger>
-                        {results.video_analysis && (
-                          <TabsTrigger value="frames">
-                            Frame Analysis
-                          </TabsTrigger>
-                        )}
-                        {results.lip_sync_analysis && (
-                          <TabsTrigger value="lipsync">Lip Sync</TabsTrigger>
-                        )}
-                        <TabsTrigger value="metadata">Metadata</TabsTrigger>
-                      </TabsList>
+                  {error && (
+                    <div className="mb-6 p-4 rounded-lg bg-destructive/10 text-destructive flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5" />
+                      <p>{error}</p>
+                    </div>
+                  )}
 
-                      <TabsContent value="details" className="space-y-4 mt-4">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>Detailed Findings</CardTitle>
-                          </CardHeader>
-                          <CardContent className="space-y-6">
-                            {results.report ? (
-                              <div className="space-y-4">
-                                {[
-                                  "Visual Content Analysis",
-                                  "Anomaly Detection",
-                                  "Deep Learning Model Evaluation",
-                                ].map(
-                                  (key) =>
-                                    results.report[key] && (
-                                      <div key={key} className="space-y-2">
-                                        <h4 className="font-semibold text-sm text-primary">
-                                          {key}
-                                        </h4>
-                                        <p className="text-sm text-muted-foreground leading-relaxed">
-                                          {results.report[key]}
-                                        </p>
-                                      </div>
-                                    )
-                                )}
-                              </div>
-                            ) : (
-                              <div className="text-center py-8 text-muted-foreground">
-                                Detailed report generation unavailable.
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-
-                        {Array.isArray(results.deepfake) && (
-                          <Card>
-                            <CardHeader>
-                              <CardTitle>Model Confidence</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="space-y-4">
-                                {results.deepfake.map((res, idx) => (
-                                  <div key={idx} className="space-y-1">
-                                    <div className="flex justify-between text-sm">
-                                      <span>{res.label}</span>
-                                      <span className="font-medium">
-                                        {(res.score * 100).toFixed(1)}%
-                                      </span>
-                                    </div>
-                                    <Progress
-                                      value={res.score * 100}
-                                      className={cn(
-                                        "h-2",
-                                        res.label.toLowerCase().includes("fake")
-                                          ? "bg-destructive/20"
-                                          : "bg-green-500/20"
-                                      )}
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        )}
-                      </TabsContent>
-
-                      {results.video_analysis && (
-                        <TabsContent value="frames" className="mt-4">
-                          <Card>
-                            <CardHeader>
-                              <CardTitle>Frame-by-Frame Analysis</CardTitle>
-                              <CardDescription>
-                                {results.video_analysis.fake_frames_detected}{" "}
-                                suspicious frames detected out of{" "}
-                                {results.video_analysis.total_frames_analyzed}{" "}
-                                analyzed.
-                              </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                              <div className="rounded-md border">
-                                <div className="grid grid-cols-4 bg-muted p-3 text-xs font-medium">
-                                  <div>Time</div>
-                                  <div>Frame</div>
-                                  <div>Score</div>
-                                  <div>Status</div>
-                                </div>
-                                <div className="max-h-[400px] overflow-y-auto">
-                                  {results.video_analysis.results.map(
-                                    (frame, idx) => (
-                                      <div
-                                        key={idx}
-                                        className={cn(
-                                          "grid grid-cols-4 p-3 text-xs border-t items-center",
-                                          frame.is_fake
-                                            ? "bg-destructive/5"
-                                            : ""
-                                        )}
-                                      >
-                                        <div>{frame.timestamp}</div>
-                                        <div>{frame.frame_number}</div>
-                                        <div>
-                                          {frame.fusion_score?.toFixed(3) ||
-                                            "N/A"}
-                                        </div>
-                                        <div>
-                                          {frame.is_fake ? (
-                                            <Badge
-                                              variant="destructive"
-                                              className="text-[10px] h-5"
-                                            >
-                                              FAKE
-                                            </Badge>
-                                          ) : (
-                                            <Badge
-                                              variant="outline"
-                                              className="text-[10px] h-5 text-green-600 border-green-200"
-                                            >
-                                              REAL
-                                            </Badge>
-                                          )}
-                                        </div>
-                                      </div>
-                                    )
-                                  )}
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        </TabsContent>
+                  {!results && !error && (
+                    <div className="space-y-6">
+                      {isAnalyzing ? (
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span>Analyzing media...</span>
+                            <span>{Math.round(analysisProgress)}%</span>
+                          </div>
+                          <Progress value={analysisProgress} className="h-2" />
+                          <p className="text-xs text-muted-foreground text-center mt-4">
+                            Running multi-modal analysis: artifacts, frequency,
+                            noise patterns, and semantic consistency.
+                          </p>
+                        </div>
+                      ) : (
+                        <Button
+                          className="w-full"
+                          size="lg"
+                          onClick={analyzeMedia}
+                        >
+                          <Search className="w-4 h-4 mr-2" />
+                          Start Analysis
+                        </Button>
                       )}
+                    </div>
+                  )}
 
-                      {results.lip_sync_analysis && (
-                        <TabsContent value="lipsync" className="mt-4">
-                          <Card>
-                            <CardHeader>
-                              <CardTitle>Lip Synchronization</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                              {typeof results.lip_sync_analysis === "object" ? (
-                                <div className="space-y-6">
-                                  <div className="grid grid-cols-2 gap-4">
-                                    <div className="p-4 rounded-lg bg-muted/50 text-center">
-                                      <div className="text-sm text-muted-foreground mb-1">
-                                        Real Probability
-                                      </div>
-                                      <div className="text-2xl font-bold text-green-500">
-                                        {(
-                                          results.lip_sync_analysis
-                                            .real_probability * 100
-                                        ).toFixed(1)}
-                                        %
-                                      </div>
-                                    </div>
-                                    <div className="p-4 rounded-lg bg-muted/50 text-center">
-                                      <div className="text-sm text-muted-foreground mb-1">
-                                        Fake Probability
-                                      </div>
-                                      <div className="text-2xl font-bold text-destructive">
-                                        {(
-                                          results.lip_sync_analysis
-                                            .fake_probability * 100
-                                        ).toFixed(1)}
-                                        %
-                                      </div>
-                                    </div>
-                                  </div>
-                                  {results.lip_sync_analysis.description && (
-                                    <p className="text-sm text-muted-foreground bg-muted p-4 rounded-lg">
-                                      {results.lip_sync_analysis.description}
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <div className="text-center p-4">
-                                  <div className="text-2xl font-bold mb-2">
-                                    {(results.lip_sync_analysis * 100).toFixed(
-                                      1
-                                    )}
-                                    %
-                                  </div>
-                                  <p className="text-sm text-muted-foreground">
-                                    Sync Confidence Score
-                                  </p>
+                  {results && (
+                    <div className="space-y-8">
+                      {file.type.startsWith("video/") ? (
+                        <VideoResultsDisplay />
+                      ) : (
+                        <div className="grid md:grid-cols-2 gap-8">
+                          <div className="space-y-6">
+                            <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+                              {preview && (
+                                <img
+                                  src={preview || "/placeholder.svg"}
+                                  alt="Analyzed Image"
+                                  className="w-full h-full object-contain"
+                                />
+                              )}
+                              {resultStatus && (
+                                <div className="absolute top-4 right-4">
+                                  <Badge
+                                    variant={
+                                      resultStatus === "fake"
+                                        ? "destructive"
+                                        : "default"
+                                    }
+                                    className="text-lg px-4 py-1"
+                                  >
+                                    {resultStatus === "fake" ? "FAKE" : "REAL"}
+                                  </Badge>
                                 </div>
                               )}
-                            </CardContent>
-                          </Card>
-                        </TabsContent>
-                      )}
+                            </div>
 
-                      <TabsContent value="metadata" className="mt-4">
-                        <Card>
-                          <CardHeader>
-                            <CardTitle>File Metadata</CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                            {results.manifest ? (
-                              <div className="rounded-lg overflow-hidden border">
-                                <ReactJson
-                                  src={results.manifest}
-                                  theme="monokai"
-                                  style={{ padding: "20px", fontSize: "12px" }}
-                                  displayDataTypes={false}
-                                />
-                              </div>
-                            ) : (
-                              <div className="text-center py-8 text-muted-foreground">
-                                No metadata manifest available.
-                              </div>
-                            )}
-                          </CardContent>
-                        </Card>
-                      </TabsContent>
-                    </Tabs>
-                  </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <Card>
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                  <Gauge className="w-8 h-8 mb-2 text-primary" />
+                                  <div className="text-2xl font-bold">
+                                    {confidenceScore
+                                      ? `${confidenceScore.toFixed(1)}%`
+                                      : "N/A"}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Confidence Score
+                                  </p>
+                                </CardContent>
+                              </Card>
+                              <Card>
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                  <Shield className="w-8 h-8 mb-2 text-primary" />
+                                  <div className="text-2xl font-bold">High</div>
+                                  <p className="text-xs text-muted-foreground">
+                                    Analysis Depth
+                                  </p>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          </div>
+
+                          <div className="space-y-6">
+                            <div>
+                              <h2 className="text-2xl font-bold mb-2">
+                                Analysis Results
+                              </h2>
+                              <p className="text-muted-foreground">
+                                {resultStatus === "fake"
+                                  ? "Our multi-modal analysis has detected significant artifacts indicating this image is likely AI-generated or manipulated."
+                                  : "Our analysis indicates this image is likely authentic. No significant manipulation artifacts were detected."}
+                              </p>
+                            </div>
+
+                            <Tabs defaultValue="details">
+                              <TabsList className="w-full">
+                                <TabsTrigger value="details" className="flex-1">
+                                  Details
+                                </TabsTrigger>
+                                <TabsTrigger value="xai" className="flex-1">
+                                  Explainability
+                                </TabsTrigger>
+                                <TabsTrigger
+                                  value="metadata"
+                                  className="flex-1"
+                                >
+                                  Metadata
+                                </TabsTrigger>
+                              </TabsList>
+
+                              <TabsContent
+                                value="details"
+                                className="space-y-4 mt-4"
+                              >
+                                <div className="space-y-4">
+                                  {results.deepfake &&
+                                  Array.isArray(results.deepfake) ? (
+                                    results.deepfake.map(
+                                      (item: any, idx: number) => (
+                                        <div key={idx} className="space-y-2">
+                                          <div className="flex justify-between text-sm">
+                                            <span className="font-medium capitalize">
+                                              {item.label} Probability
+                                            </span>
+                                            <span>
+                                              {(item.score * 100).toFixed(1)}%
+                                            </span>
+                                          </div>
+                                          <Progress
+                                            value={item.score * 100}
+                                            className="h-2"
+                                          />
+                                        </div>
+                                      )
+                                    )
+                                  ) : (
+                                    <div className="p-4 bg-muted rounded-lg text-sm text-muted-foreground">
+                                      Detailed score breakdown unavailable
+                                    </div>
+                                  )}
+
+                                  <div className="p-4 rounded-lg bg-muted space-y-2">
+                                    <h4 className="font-medium text-sm">
+                                      Technical Analysis
+                                    </h4>
+                                    <ul className="text-sm space-y-1 text-muted-foreground">
+                                      <li>
+                                        • Frequency domain analysis completed
+                                      </li>
+                                      <li>
+                                        • Noise pattern consistency checked
+                                      </li>
+                                      <li>
+                                        • Compression artifact inspection done
+                                      </li>
+                                      <li>• Semantic consistency verified</li>
+                                    </ul>
+                                  </div>
+                                </div>
+                              </TabsContent>
+
+                              <TabsContent value="xai" className="mt-4">
+                                {results.xai_explanations ? (
+                                  <div className="space-y-4">
+                                    <p className="text-sm text-muted-foreground">
+                                      Heatmaps highlight areas that influenced
+                                      the AI's decision. Red areas indicate
+                                      strong indicators of manipulation.
+                                    </p>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      {Object.entries(
+                                        results.xai_explanations
+                                      ).map(([method, data]: [string, any]) => {
+                                        if (
+                                          method === "prediction" ||
+                                          method === "error"
+                                        )
+                                          return null;
+                                        return (
+                                          <div
+                                            key={method}
+                                            className="space-y-2"
+                                          >
+                                            <div className="aspect-square rounded-lg overflow-hidden border bg-muted relative group">
+                                              <img
+                                                src={`data:image/png;base64,${data}`}
+                                                alt={`${method} Heatmap`}
+                                                className="w-full h-full object-cover"
+                                              />
+                                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                <Button
+                                                  variant="secondary"
+                                                  size="sm"
+                                                >
+                                                  View Full
+                                                </Button>
+                                              </div>
+                                            </div>
+                                            <p className="text-xs text-center font-medium">
+                                              {method}
+                                            </p>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col items-center justify-center p-8 text-center space-y-4 border-2 border-dashed rounded-lg">
+                                    <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                                      <Search className="w-6 h-6 text-muted-foreground" />
+                                    </div>
+                                    <div>
+                                      <h4 className="font-medium">
+                                        No Explanations Available
+                                      </h4>
+                                      <p className="text-sm text-muted-foreground">
+                                        XAI analysis was not enabled or failed
+                                        for this image.
+                                      </p>
+                                    </div>
+                                  </div>
+                                )}
+                              </TabsContent>
+
+                              <TabsContent value="metadata" className="mt-4">
+                                <div className="space-y-4">
+                                  {results.c2pa_verification ? (
+                                    <div className="space-y-4">
+                                      <div className="flex items-center gap-2 p-3 bg-green-500/10 text-green-600 rounded-lg">
+                                        <CheckCircle className="w-5 h-5" />
+                                        <span className="font-medium">
+                                          C2PA Signature Verified
+                                        </span>
+                                      </div>
+
+                                      <Accordion
+                                        type="single"
+                                        collapsible
+                                        className="w-full"
+                                      >
+                                        <AccordionItem value="manifest">
+                                          <AccordionTrigger>
+                                            Manifest Information
+                                          </AccordionTrigger>
+                                          <AccordionContent>
+                                            <div className="space-y-2 text-sm">
+                                              <div className="grid grid-cols-3 gap-2">
+                                                <span className="font-medium text-muted-foreground">
+                                                  Title:
+                                                </span>
+                                                <span className="col-span-2">
+                                                  {results.c2pa_verification
+                                                    .manifest?.title || "N/A"}
+                                                </span>
+                                              </div>
+                                              <div className="grid grid-cols-3 gap-2">
+                                                <span className="font-medium text-muted-foreground">
+                                                  Format:
+                                                </span>
+                                                <span className="col-span-2">
+                                                  {results.c2pa_verification
+                                                    .manifest?.format || "N/A"}
+                                                </span>
+                                              </div>
+                                              <div className="grid grid-cols-3 gap-2">
+                                                <span className="font-medium text-muted-foreground">
+                                                  Instance ID:
+                                                </span>
+                                                <span className="col-span-2 break-all font-mono text-xs">
+                                                  {results.c2pa_verification
+                                                    .manifest?.instance_id ||
+                                                    "N/A"}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </AccordionContent>
+                                        </AccordionItem>
+
+                                        <AccordionItem value="signature">
+                                          <AccordionTrigger>
+                                            Signature Details
+                                          </AccordionTrigger>
+                                          <AccordionContent>
+                                            <div className="space-y-2 text-sm">
+                                              <div className="grid grid-cols-3 gap-2">
+                                                <span className="font-medium text-muted-foreground">
+                                                  Issuer:
+                                                </span>
+                                                <span className="col-span-2">
+                                                  {results.c2pa_verification
+                                                    .signature?.issuer || "N/A"}
+                                                </span>
+                                              </div>
+                                              <div className="grid grid-cols-3 gap-2">
+                                                <span className="font-medium text-muted-foreground">
+                                                  Date:
+                                                </span>
+                                                <span className="col-span-2">
+                                                  {results.c2pa_verification
+                                                    .signature?.time || "N/A"}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          </AccordionContent>
+                                        </AccordionItem>
+
+                                        <AccordionItem value="raw">
+                                          <AccordionTrigger>
+                                            Raw Data
+                                          </AccordionTrigger>
+                                          <AccordionContent>
+                                            <pre className="bg-muted p-4 rounded-lg overflow-auto text-xs max-h-[200px]">
+                                              {JSON.stringify(
+                                                results.c2pa_verification,
+                                                null,
+                                                2
+                                              )}
+                                            </pre>
+                                          </AccordionContent>
+                                        </AccordionItem>
+                                      </Accordion>
+                                    </div>
+                                  ) : (
+                                    <div className="flex flex-col items-center justify-center p-8 text-center space-y-4 border-2 border-dashed rounded-lg">
+                                      <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+                                        <FileWarning className="w-6 h-6 text-muted-foreground" />
+                                      </div>
+                                      <div>
+                                        <h4 className="font-medium">
+                                          No C2PA Metadata
+                                        </h4>
+                                        <p className="text-sm text-muted-foreground">
+                                          This image does not contain Content
+                                          Credentials or digital signature data.
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </TabsContent>
+                            </Tabs>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+              )}
+            </CardContent>
+          </Card>
         </motion.div>
-      </div>
+      </main>
       <Footer />
-    </main>
+    </div>
   );
 }

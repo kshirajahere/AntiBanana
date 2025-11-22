@@ -13,10 +13,13 @@ CORS(app)
 # Lazy loading of the detector
 detector = None
 
-def get_detector():
+def get_detector(enable_xai=False):
     global detector
     if detector is None:
-        detector = DeepfakeDetector()
+        detector = DeepfakeDetector(enable_xai=enable_xai)
+    elif enable_xai and not detector.enable_xai:
+        # Reinitialize with XAI if needed
+        detector = DeepfakeDetector(enable_xai=True)
     return detector
 
 @app.route('/detect', methods=['POST'])
@@ -34,6 +37,10 @@ def detect_image():
     quick_mode = request.form.get('quick', 'false').lower() == 'true'
     include_c2pa = request.form.get('c2pa', 'true').lower() == 'true'  # C2PA enabled by default
 
+    # Check if XAI is requested
+    enable_xai = request.form.get('enable_xai', 'false').lower() == 'true'
+    xai_methods = request.form.get('xai_methods', 'GradCAM++').split(',')
+
     if file:
         # Save to temp file
         temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1])
@@ -42,11 +49,10 @@ def detect_image():
         temp_file.close()
 
         try:
-            # Run detection
-            det = get_detector()
+            det = get_detector(enable_xai=enable_xai)
             result = det.detect_all(temp_path, include_c2pa=include_c2pa)
             
-            # Add explainability if requested
+            # Add explainability if requested (using ExplainabilityEngine)
             if include_explanations:
                 print(f"🔍 Generating explainability with method: {explanation_method}")
                 explainability_result = det.generate_explainability(
@@ -55,6 +61,13 @@ def detect_image():
                     quick_mode=quick_mode
                 )
                 result['explainability'] = explainability_result
+            
+            # Add XAI explanations if requested (using XAIExplainer)
+            if enable_xai:
+                print(f"🔍 Generating XAI explanations with methods: {xai_methods}")
+                xai_result = det.get_xai_explanation(temp_path, methods=xai_methods)
+                result['xai_explanations'] = xai_result
+
             
             print(jsonify(result))
             return jsonify(result)
@@ -139,6 +152,68 @@ def verify_c2pa():
         except Exception as e:
             return jsonify({'error': str(e)}), 500
         finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+
+@app.route('/protect', methods=['POST'])
+@app.route('/protect_image', methods=['POST'])
+def protect_image():
+    """
+    MMHI Protection endpoint - Protects images against deepfake generation.
+    Accepts: file, strength (medium/high/extreme)
+    Returns: Protected image as base64
+    """
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # Get protection strength parameter
+    strength = request.form.get('strength', 'medium')
+    if strength not in ['medium', 'high', 'extreme']:
+        strength = 'medium'
+    
+    if file:
+        # Save to temp file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1])
+        file.save(temp_file.name)
+        temp_path = temp_file.name
+        temp_file.close()
+        
+        try:
+            # Import and initialize MMHI pipeline
+            from mmhi_protection.mmhi_pipeline import MMHIPipeline
+            
+            print(f"🛡️ Protecting image with strength: {strength}")
+            pipeline = MMHIPipeline()
+            
+            # Protect the image
+            result = pipeline.protect(temp_path, strength=strength)
+            
+            # Convert protected image to base64
+            import io
+            import base64
+            from PIL import Image
+            
+            buf = io.BytesIO()
+            result["protected_image"].save(buf, format="PNG")
+            img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+            
+            return jsonify({
+                'protected_image': img_b64,
+                'processing_time': result['processing_time'],
+                'phases_applied': result['phases_applied'],
+                'strength': strength
+            })
+            
+        except Exception as e:
+            print(f"❌ Protection failed: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+        finally:
             # Clean up
             if os.path.exists(temp_path):
                 os.remove(temp_path)
@@ -148,5 +223,6 @@ if __name__ == '__main__':
     from multiprocessing import freeze_support
     freeze_support()
     
-    print("Starting Deepfake Detection Server on port 5001...")
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    print("Starting Deepfake Detection Server on port 5000...")
+    # Disable reloader to prevent restarts during file processing
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)

@@ -146,29 +146,6 @@ class C2PAVerifier:
             # Extract claim generator
             claim_generator = active_data.get("claim_generator", "Unknown")
             chain["claim_generator"] = claim_generator
-            
-            # Extract assertions (actions, metadata, etc.)
-            assertions = active_data.get("assertions", [])
-            chain["assertions"] = self._parse_assertions(assertions)
-            
-            # Extract signature info
-            signature_info = active_data.get("signature_info", {})
-            chain["signature_valid"] = self._verify_signature(signature_info)
-            
-            # Extract ingredients (parent content)
-            ingredients = active_data.get("ingredients", [])
-            chain["ingredients"] = self._parse_ingredients(ingredients)
-            
-            # Build edit history from assertions
-            chain["edit_history"] = self._build_edit_history(assertions)
-            
-            # Extract creation info
-            chain["creation_info"] = self._extract_creation_info(active_data)
-            
-            # Calculate trust level
-            chain["trust_level"] = self._calculate_trust_level(chain)
-            
-            # Determine if verified
             chain["verified"] = chain["signature_valid"] and chain["trust_level"] in ["high", "medium"]
             
             # Calculate risk score
