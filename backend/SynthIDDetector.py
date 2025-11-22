@@ -21,7 +21,7 @@ class SynthIDDetector:
     def __init__(self):
         """Initialize the SynthID detector."""
         print("✅ SynthID Detector Initialized (Google Invisible Watermark Detection)")
-        self.min_confidence_threshold = 0.5
+        self.min_confidence_threshold = 0.25  # Lowered for better detection of AI-generated images
         
     def detect_synthid(self, image_path):
         """
@@ -183,15 +183,15 @@ class SynthIDDetector:
             # SynthID typically shows specific patterns (not too uniform, not too chaotic)
             score = 0.0
             
-            # Look for characteristic patterns
-            if 0.5 < variance_ratio_1 < 2.0 and 0.5 < variance_ratio_2 < 2.0:
+            # Look for characteristic patterns (more sensitive detection)
+            if 0.4 < variance_ratio_1 < 2.5 and 0.4 < variance_ratio_2 < 2.5:
                 # Balanced variance across rings suggests potential watermark
-                score = 0.3
+                score = 0.4  # Increased from 0.3
                 
                 # Check for periodic patterns (characteristic of SynthID)
                 periodicity = self._detect_periodicity(ring2)
-                if periodicity > 0.5:
-                    score += 0.4
+                if periodicity > 0.3:  # Lowered from 0.5
+                    score += 0.5  # Increased from 0.4
             
             return min(score, 1.0)
             

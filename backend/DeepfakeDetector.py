@@ -631,16 +631,16 @@ class DeepfakeDetector:
         final_score = float(np.clip(ensemble_score, 0, 1))
         
         # === Dynamic Threshold Based on Confidence ===
-        # Balanced threshold that adapts to signal strength
-        base_threshold = 0.50 # Lowered from 0.52
+        # More aggressive thresholds to catch fake images
+        base_threshold = 0.42  # Lowered from 0.50 to be more aggressive
         
         # Lower threshold if multiple strong signals detected
         if signal_count >= 3:
-            threshold = 0.45  # Lower bar when multiple signals agree
+            threshold = 0.38  # Very aggressive when multiple signals agree
         elif signal_count >= 2:
-            threshold = 0.48  # Moderate bar for 2 signals
+            threshold = 0.40  # Aggressive for 2 signals
         else:
-            threshold = base_threshold  # Higher bar for single signal
+            threshold = base_threshold  # More sensitive base threshold
         
         verdict = "Real"
         confidence_level = "Low"
