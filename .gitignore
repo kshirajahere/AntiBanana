@@ -1,0 +1,44 @@
+# Node modules and dependency caches
+node_modules/
+package-lock.json
+yarn.lock
+.pnp.*
+.npm/
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+
+# Environment and secrets
+
+# Logs and diagnostics
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# OS/editor artifacts
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Storybook / testing artifacts
+storybook-static/
+coverage/
+
+# Temporary files
+*.swp
+*.swo
+*.tmp
+*.temp
+
+# Project-specific ignores
+.venv/
+__pycache__/
+uv.lock
+bun.lock
+jsrepo.json
+components.json
