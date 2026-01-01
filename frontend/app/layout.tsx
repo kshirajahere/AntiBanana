@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 const spaceGrotesk = Space_Grotesk({ subsets: ['latin'], variable: '--font-space' });
 
 export const metadata: Metadata = {
-  title: 'FenceAI - Protect and Detect Deepfakes in Media',
+  title: 'AntiBanana - Protect and Detect Deepfakes in Media',
   description: 'Harness the power of AI to safeguard against manipulated media.',
 };
 

@@ -154,6 +154,7 @@ export default function DetectPage() {
         endpoint = "http://localhost:5000/detect-audio";
       }
 
+
       const response = await fetch(endpoint, {
         method: "POST",
         body: formData,
@@ -161,11 +162,45 @@ export default function DetectPage() {
 
       clearInterval(progressInterval);
 
+      // Check if response is OK
       if (!response.ok) {
-        throw new Error("Analysis failed. Please try again.");
+        // Try to parse error message from response
+        let errorMessage = `Analysis failed (${response.status}: ${response.statusText})`;
+        try {
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (jsonError) {
+          // If can't parse JSON, try to get text
+          try {
+            const errorText = await response.text();
+            if (errorText && errorText.length < 200) {
+              errorMessage += `: ${errorText}`;
+            }
+          } catch (textError) {
+            // Ignore
+          }
+        }
+        throw new Error(errorMessage);
       }
 
-      const data = await response.json();
+      // Parse JSON response with better error handling
+      let data: any;
+      try {
+        const responseText = await response.text();
+        console.log('Response text:', responseText.substring(0, 200)); // Log first 200 chars
+        data = JSON.parse(responseText);
+      } catch (jsonError) {
+        console.error('JSON parsing error:', jsonError);
+        throw new Error(`Failed to parse server response: ${jsonError instanceof Error ? jsonError.message : 'Invalid JSON'}`);
+      }
+
+      // Check for error in response data
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
       setAnalysisProgress(100);
 
       // Short delay to show 100% progress
@@ -191,6 +226,12 @@ export default function DetectPage() {
 
         // For audio results
         if (file.type.startsWith("audio/")) {
+          // Validate audio results
+          if (!data.prediction || data.confidence === undefined) {
+            setError("Detection failed: Invalid audio analysis results");
+            setIsAnalyzing(false);
+            return;
+          }
           setResults(data);
           setIsAnalyzing(false);
           return;
@@ -209,9 +250,16 @@ export default function DetectPage() {
       }, 500);
     } catch (err) {
       clearInterval(progressInterval);
-      setError(
-        err instanceof Error ? err.message : "An unknown error occurred"
-      );
+      console.error('Analysis error:', err);
+
+      let errorMessage = "An unknown error occurred";
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === "string") {
+        errorMessage = err;
+      }
+
+      setError(errorMessage);
       setIsAnalyzing(false);
     }
   };

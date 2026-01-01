@@ -17,7 +17,7 @@ export function Footer() {
           >
             <div className="flex items-center space-x-2 mb-4">
               <Shield className="w-8 h-8" />
-              <span className="font-space font-bold text-xl">GuardAI</span>
+              <span className="font-space font-bold text-xl">AntiBanana</span>
             </div>
             <p className="text-muted-foreground max-w-md">
               Protecting digital authenticity through advanced AI technology.
@@ -71,7 +71,7 @@ export function Footer() {
           transition={{ duration: 0.6, delay: 0.6 }}
           className="mt-12 pt-8 border-t border-border text-center text-sm text-muted-foreground"
         >
-          © {new Date().getFullYear()} GuardAI. All rights reserved.
+          © {new Date().getFullYear()} AntiBanana. All rights reserved.
         </motion.div>
       </div>
     </footer>

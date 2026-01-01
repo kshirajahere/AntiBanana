@@ -199,12 +199,12 @@ export default function ProtectPage() {
 
     const link = document.createElement("a");
     link.href = protectedImage;
-    
+
     // Determine file extension based on file type
     const isAudio = file?.type.startsWith("audio/");
     const extension = isAudio ? "wav" : "png";
     link.download = `protected_${file?.name.replace(/\.[^/.]+$/, '')}.${extension}`;
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -365,14 +365,14 @@ export default function ProtectPage() {
                             Protection Pipeline
                           </h3>
                           <p className="text-sm text-muted-foreground">
-                            {file?.type.startsWith("audio/") 
+                            {file?.type.startsWith("audio/")
                               ? "Applying multi-layer audio protection:"
                               : "Applying multi-stage adversarial perturbations:"}
                           </p>
                         </div>
 
                         <div className="space-y-3">
-                          {file?.type.startsWith("audio/") ? [
+                          {(file?.type.startsWith("audio/") ? [
                             { name: "Psychoacoustic Masking", progress: 20 },
                             { name: "Temporal Poisoning", progress: 40 },
                             { name: "Prosody Shifting", progress: 60 },
@@ -384,7 +384,7 @@ export default function ProtectPage() {
                             { name: "Frequency Poisoning", progress: 60 },
                             { name: "Boundary Shifting", progress: 80 },
                             { name: "Final Optimization", progress: 95 },
-                          ].map((step, idx) => (
+                          ]).map((step, idx) => (
                             <div key={idx} className="flex items-center gap-3">
                               <div
                                 className={cn(
@@ -448,8 +448,8 @@ export default function ProtectPage() {
                             <div className="w-full h-full bg-gradient-to-br from-primary/10 to-primary/5 flex flex-col items-center justify-center p-8">
                               <Music className="w-24 h-24 text-primary mb-4" />
                               <p className="text-lg font-medium mb-4">Protected Audio</p>
-                              <audio 
-                                controls 
+                              <audio
+                                controls
                                 className="w-full max-w-md"
                                 src={protectedImage || ""}
                               >
@@ -521,38 +521,38 @@ export default function ProtectPage() {
                                   </Badge>
                                 )
                               ) || (
-                                file?.type.startsWith("audio/") ? (
-                                  <>
-                                    <Badge variant="secondary">
-                                      Psychoacoustic Masking
-                                    </Badge>
-                                    <Badge variant="secondary">
-                                      Temporal Poisoning
-                                    </Badge>
-                                    <Badge variant="secondary">
-                                      Prosody Shifting
-                                    </Badge>
-                                    <Badge variant="secondary">
-                                      Phase Obfuscation
-                                    </Badge>
-                                    <Badge variant="secondary">
-                                      Harmonic Disruption
-                                    </Badge>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Badge variant="secondary">
-                                      Semantic Decoupling
-                                    </Badge>
-                                    <Badge variant="secondary">
-                                      Attention Hijacking
-                                    </Badge>
-                                    <Badge variant="secondary">
-                                      Frequency Poisoning
-                                    </Badge>
-                                  </>
-                                )
-                              )}
+                                  file?.type.startsWith("audio/") ? (
+                                    <>
+                                      <Badge variant="secondary">
+                                        Psychoacoustic Masking
+                                      </Badge>
+                                      <Badge variant="secondary">
+                                        Temporal Poisoning
+                                      </Badge>
+                                      <Badge variant="secondary">
+                                        Prosody Shifting
+                                      </Badge>
+                                      <Badge variant="secondary">
+                                        Phase Obfuscation
+                                      </Badge>
+                                      <Badge variant="secondary">
+                                        Harmonic Disruption
+                                      </Badge>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Badge variant="secondary">
+                                        Semantic Decoupling
+                                      </Badge>
+                                      <Badge variant="secondary">
+                                        Attention Hijacking
+                                      </Badge>
+                                      <Badge variant="secondary">
+                                        Frequency Poisoning
+                                      </Badge>
+                                    </>
+                                  )
+                                )}
                             </div>
                           </div>
 
@@ -621,10 +621,10 @@ export default function ProtectPage() {
                           {s === "low"
                             ? "Light"
                             : s === "medium"
-                            ? "Balanced"
-                            : s === "high"
-                            ? "Strong"
-                            : "Maximum"}
+                              ? "Balanced"
+                              : s === "high"
+                                ? "Strong"
+                                : "Maximum"}
                         </div>
                       </div>
                     ))}
