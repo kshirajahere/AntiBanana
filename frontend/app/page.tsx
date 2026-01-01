@@ -183,7 +183,7 @@ export default function Home() {
                   viewport={{ once: true }}
                   className="aspect-square md:aspect-video rounded-3xl bg-card border border-white/10 overflow-hidden relative group shadow-2xl shadow-primary/10"
                 >
-                  <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=2000&auto=format&fit=crop')] bg-cover bg-center" />
+                  <div className="absolute inset-0 bg-[url('/ai-face.png')] bg-cover bg-center" />
 
                   {/* Scanner overlay */}
                   <motion.div
